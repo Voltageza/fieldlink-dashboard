@@ -423,8 +423,14 @@
     function sendCommand(cmd) {
       if (client && isConnected && deviceId) {
         const topic = `fieldlink/${deviceId}/command`;
-        client.publish(topic, cmd);
-        console.log('Sent to', topic + ':', cmd);
+        client.publish(topic, cmd, { qos: 1 }, (err) => {
+          if (err) {
+            console.error('Publish failed:', err);
+            alert('Command failed: ' + err.message);
+          } else {
+            console.log('Command sent OK:', topic, cmd);
+          }
+        });
       } else {
         alert('Not connected to device');
       }
