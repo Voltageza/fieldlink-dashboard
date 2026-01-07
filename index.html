@@ -449,14 +449,20 @@
 
         // Subscribe to device-specific topic
         const topic = `fieldlink/${deviceId}/telemetry`;
-        client.subscribe(topic, (err) => {
-          if (!err) {
-            console.log('Subscribed to:', topic);
+        console.log('Attempting to subscribe to:', topic);
+        client.subscribe(topic, { qos: 1 }, (err, granted) => {
+          if (err) {
+            console.error('Subscribe error:', err);
+            el.mqttStatusText.textContent = 'Sub Error';
+          } else {
+            console.log('Subscribed successfully:', granted);
+            el.mqttStatusText.textContent = 'Subscribed';
           }
         });
       });
 
       client.on('message', (topic, msg) => {
+        console.log('Message received on:', topic, msg.toString().substring(0, 50));
         if (topic === `fieldlink/${deviceId}/telemetry`) {
           updateTelemetry(msg.toString());
         }
