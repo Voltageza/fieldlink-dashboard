@@ -447,22 +447,26 @@
         el.mqttStatus.classList.add('connected');
         el.mqttStatusText.textContent = 'Connected';
 
-        // Subscribe to device-specific topic
-        const topic = `fieldlink/${deviceId}/telemetry`;
-        console.log('Attempting to subscribe to:', topic);
-        client.subscribe(topic, { qos: 1 }, (err, granted) => {
+        // Subscribe to wildcard to catch all messages (debug)
+        const wildcardTopic = 'fieldlink/#';
+        const specificTopic = `fieldlink/${deviceId}/telemetry`;
+        console.log('Subscribing to wildcard:', wildcardTopic);
+        console.log('Looking for:', specificTopic);
+
+        client.subscribe(wildcardTopic, { qos: 1 }, (err, granted) => {
           if (err) {
             console.error('Subscribe error:', err);
             el.mqttStatusText.textContent = 'Sub Error';
           } else {
             console.log('Subscribed successfully:', granted);
-            el.mqttStatusText.textContent = 'Subscribed';
+            el.mqttStatusText.textContent = 'Listening...';
           }
         });
       });
 
       client.on('message', (topic, msg) => {
-        console.log('Message received on:', topic, msg.toString().substring(0, 50));
+        console.log('>>> MESSAGE:', topic, msg.toString().substring(0, 80));
+        el.lastSeen.textContent = 'Got: ' + topic;
         if (topic === `fieldlink/${deviceId}/telemetry`) {
           updateTelemetry(msg.toString());
         }
