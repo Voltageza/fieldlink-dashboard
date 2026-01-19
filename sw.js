@@ -1,12 +1,14 @@
-const CACHE_NAME = 'fieldlink-v1';
+const CACHE_NAME = 'fieldlogic-v11';
 const ASSETS = [
   './',
   './index.html',
+  './config.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
-  'https://unpkg.com/mqtt/dist/mqtt.min.js'
+  './supabase.min.js',
+  './mqtt.min.js',
+  'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap'
 ];
 
 // Install - cache assets
@@ -32,10 +34,15 @@ self.addEventListener('activate', event => {
 
 // Fetch - network first, fallback to cache
 self.addEventListener('fetch', event => {
+  // Skip Supabase and MQTT requests
+  if (event.request.url.includes('supabase.co') ||
+      event.request.url.includes('hivemq.cloud')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Clone and cache successful responses
         if (response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));

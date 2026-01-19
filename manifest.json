@@ -1,7 +1,7 @@
 {
-  "name": "FieldLink Pump Controller",
-  "short_name": "FieldLink",
-  "description": "Industrial Pump Monitoring and Control",
+  "name": "FieldLogic - Industrial IoT Platform",
+  "short_name": "FieldLogic",
+  "description": "Industrial Pump Monitoring and Control Platform",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0a0e14",

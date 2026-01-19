@@ -3,734 +3,3916 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FieldLink Pump Controller</title>
+  <title>FieldLogic - Industrial IoT Platform</title>
+  <!-- v14 - Telegram notifications -->
 
   <!-- PWA Meta Tags -->
-  <meta name="description" content="Industrial Pump Monitoring and Control">
-  <meta name="theme-color" content="#00d4ff">
+  <meta name="description" content="FieldLogic - Industrial Pump Monitoring and Control Platform">
+  <meta name="theme-color" content="#f5f5f7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="FieldLink">
+  <meta name="apple-mobile-web-app-title" content="FieldLogic">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
 
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    :root {
-      --bg-primary: #0a0e14;
-      --bg-secondary: #111821;
-      --bg-card: #151c28;
-      --border-color: #1e2a3a;
-      --text-primary: #e4e8ef;
-      --text-secondary: #6b7a8f;
-      --text-muted: #3d4a5c;
-      --accent-cyan: #00d4ff;
-      --status-running: #00ff88;
-      --status-stopped: #6b7a8f;
-      --status-fault: #ff4757;
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=SF+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Basic page navigation that works without external libraries -->
+  <script>
+    // ============================================
+    // THEME TOGGLE
+    // ============================================
+    function initTheme() {
+      var savedTheme = localStorage.getItem('fieldlogic-theme');
+      if (savedTheme) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        updateThemeColor(savedTheme);
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        updateThemeColor('dark');
+      }
     }
+
+    function toggleTheme() {
+      var currentTheme = document.documentElement.getAttribute('data-theme');
+      var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('fieldlogic-theme', newTheme);
+      updateThemeColor(newTheme);
+    }
+
+    function updateThemeColor(theme) {
+      var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeColorMeta) {
+        themeColorMeta.setAttribute('content', theme === 'dark' ? '#000000' : '#f5f5f7');
+      }
+    }
+
+    // Initialize theme immediately to prevent flash
+    initTheme();
+
+    // ============================================
+    // PAGE NAVIGATION
+    // ============================================
+    function showPage(pageId) {
+      console.log('Navigating to:', pageId);
+      var pages = document.querySelectorAll('.page');
+      for (var i = 0; i < pages.length; i++) {
+        pages[i].classList.remove('active');
+      }
+      var target = document.getElementById('page-' + pageId);
+      if (target) {
+        target.classList.add('active');
+      }
+      // Handle page-specific logic after page switch
+      if (pageId === 'dashboard' && typeof loadDevices === 'function') {
+        loadDevices();
+        if (typeof connectMQTT === 'function') connectMQTT();
+      } else if (pageId === 'settings' && typeof loadTelegramStatus === 'function') {
+        document.getElementById('settings-user-email').textContent = currentUser ? currentUser.email : '';
+        loadTelegramStatus();
+        loadNotificationHistory();
+      } else if (pageId !== 'device' && typeof disconnectMQTT === 'function') {
+        disconnectMQTT();
+      }
+    }
+    function showModal(id) { document.getElementById(id).classList.add('visible'); }
+    function hideModal(id) { document.getElementById(id).classList.remove('visible'); }
+  </script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════
+       APPLE-INSPIRED AESTHETIC - FieldLogic Industrial Interface
+       Clean, minimal design with subtle depth and refined typography
+    ═══════════════════════════════════════════════════════════ */
+
+    /* Light Mode (default) */
+    :root, [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f7;
+      --bg-tertiary: #fafafa;
+      --text-primary: #1d1d1f;
+      --text-secondary: #86868b;
+      --text-tertiary: #aeaeb2;
+      --border-color: #d2d2d7;
+      --border-light: #e8e8ed;
+      --accent: #007aff;
+      --accent-hover: #0056b3;
+      --success: #34c759;
+      --warning: #ff9500;
+      --danger: #ff3b30;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --header-bg: rgba(255,255,255,0.8);
+      --modal-overlay: rgba(0,0,0,0.4);
+    }
+
+    /* Dark Mode */
+    [data-theme="dark"] {
+      --bg-primary: #1c1c1e;
+      --bg-secondary: #000000;
+      --bg-tertiary: #2c2c2e;
+      --text-primary: #ffffff;
+      --text-secondary: #98989d;
+      --text-tertiary: #636366;
+      --border-color: #38383a;
+      --border-light: #2c2c2e;
+      --accent: #0a84ff;
+      --accent-hover: #409cff;
+      --success: #30d158;
+      --warning: #ff9f0a;
+      --danger: #ff453a;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+      --header-bg: rgba(28,28,30,0.8);
+      --modal-overlay: rgba(0,0,0,0.7);
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      font-family: 'JetBrains Mono', monospace;
-      background: var(--bg-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', sans-serif;
+      background: var(--bg-secondary);
       color: var(--text-primary);
       min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-image:
-        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-      background-size: 50px 50px;
-      pointer-events: none;
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 24px;
     }
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+
+    /* ─────────────── HEADER ─────────────── */
     .header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: var(--header-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
     }
-    .logo { display: flex; align-items: center; gap: 12px; }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
     .logo-icon {
-      width: 42px; height: 42px;
-      background: linear-gradient(135deg, var(--accent-cyan) 0%, #0088aa 100%);
-      border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 18px;
-      color: var(--bg-primary); box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+      width: 36px;
+      height: 36px;
+      background: var(--text-primary);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: white;
     }
-    .logo-text { font-family: 'Chakra Petch', sans-serif; font-size: 24px; font-weight: 700; }
-    .logo-text span { color: var(--accent-cyan); }
-    .device-id {
-      font-size: 11px; color: var(--text-secondary); margin-top: 2px;
-      font-family: 'JetBrains Mono', monospace;
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
     }
-    .header-right { display: flex; align-items: center; gap: 16px; }
-    .connection-status {
-      display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 6px; font-size: 12px;
+
+    .logo-text span {
+      color: var(--accent);
     }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-fault); }
-    .status-dot.connected { background: var(--status-running); box-shadow: 0 0 10px var(--status-running); }
-    .btn-settings {
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 6px; padding: 8px 12px; cursor: pointer; color: var(--text-secondary);
-      font-size: 14px; transition: all 0.2s;
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
-    .btn-settings:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
-    .grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; }
-    .card {
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: 20px; margin-bottom: 20px;
+
+    .nav-link {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
     }
-    .card-title {
-      font-family: 'Chakra Petch', sans-serif; font-size: 12px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-secondary);
-      margin-bottom: 16px;
+
+    .nav-link:hover {
+      color: var(--text-primary);
+      background: var(--bg-secondary);
     }
-    .state-display { text-align: center; padding: 30px 16px; }
-    .state-indicator {
-      display: inline-flex; align-items: center; gap: 14px; padding: 16px 40px;
-      border-radius: 12px; background: var(--bg-secondary); border: 2px solid var(--border-color);
+
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-    .state-indicator.running { border-color: var(--status-running); box-shadow: 0 0 30px rgba(0, 255, 136, 0.2); }
-    .state-indicator.fault { border-color: var(--status-fault); box-shadow: 0 0 30px rgba(255, 71, 87, 0.3); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-    .state-icon { width: 20px; height: 20px; border-radius: 50%; }
-    .state-icon.running { background: var(--status-running); box-shadow: 0 0 15px var(--status-running); }
-    .state-icon.stopped { background: var(--status-stopped); }
-    .state-icon.fault { background: var(--status-fault); box-shadow: 0 0 15px var(--status-fault); }
-    .state-text { font-family: 'Chakra Petch', sans-serif; font-size: 28px; font-weight: 700; letter-spacing: 3px; }
-    .state-text.running { color: var(--status-running); }
-    .state-text.stopped { color: var(--status-stopped); }
-    .state-text.fault { color: var(--status-fault); }
-    .current-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .current-card {
-      background: var(--bg-secondary); border: 1px solid var(--border-color);
-      border-radius: 10px; padding: 20px; text-align: center;
+
+    .user-email {
+      font-size: 13px;
+      color: var(--text-secondary);
     }
-    .current-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-    .current-value { font-size: 36px; font-weight: 600; color: var(--accent-cyan); line-height: 1; margin-bottom: 4px; }
-    .current-unit { font-size: 12px; color: var(--text-muted); }
-    .controls { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ─────────────── BUTTONS ─────────────── */
     .btn {
-      font-family: 'Chakra Petch', sans-serif; font-size: 14px; font-weight: 600;
-      letter-spacing: 1.5px; padding: 14px 20px; border: none; border-radius: 10px;
-      cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
-    .btn:hover { transform: translateY(-2px); }
-    .btn-start { background: linear-gradient(135deg, #00aa66, #00ff88); color: var(--bg-primary); }
-    .btn-stop { background: linear-gradient(135deg, #cc3344, #ff4757); color: white; }
-    .btn-reset { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .status-list { display: flex; flex-direction: column; gap: 12px; }
-    .status-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px; background: var(--bg-secondary); border-radius: 8px;
+
+    .btn:hover {
+      transform: scale(1.02);
     }
-    .status-label { font-size: 12px; color: var(--text-secondary); }
-    .status-badge {
-      padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-light);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #e5342b;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #2db84e;
+    }
+
+    .btn-small {
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ─────────────── PAGE SECTIONS ─────────────── */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ─────────────── LANDING PAGE ─────────────── */
+    .landing-hero {
+      text-align: center;
+      padding: 80px 20px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .landing-hero .logo-icon {
+      width: 72px;
+      height: 72px;
+      font-size: 28px;
+      border-radius: var(--radius-md);
+      margin: 0 auto 24px;
+    }
+
+    .landing-hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -1px;
+    }
+
+    .landing-hero h1 span {
+      color: var(--accent);
+    }
+
+    .landing-hero .tagline {
+      color: var(--text-secondary);
+      font-size: 18px;
+      margin-bottom: 32px;
+      font-weight: 400;
+    }
+
+    .landing-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .feature-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ─────────────── AUTH FORMS ─────────────── */
+    .auth-container {
+      max-width: 400px;
+      margin: 60px auto;
+    }
+
+    .auth-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .auth-card h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-align: center;
+      letter-spacing: -0.5px;
+    }
+
+    .auth-subtitle {
+      color: var(--text-secondary);
+      font-size: 15px;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-family: inherit;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-tertiary);
+    }
+
+    .auth-card .btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 8px;
+      font-size: 15px;
+    }
+
+    .auth-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .auth-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .auth-footer a:hover {
+      text-decoration: underline;
+    }
+
+    .alert {
+      padding: 14px 16px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      border-radius: var(--radius-sm);
+    }
+
+    .alert-error {
+      background: rgba(255, 59, 48, 0.1);
+      color: var(--danger);
+    }
+
+    .alert-success {
+      background: rgba(52, 199, 89, 0.1);
+      color: var(--success);
+    }
+
+    /* ─────────────── DASHBOARD ─────────────── */
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .dashboard-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -1px;
+    }
+
+    /* ─────────────── DEVICES LIST ─────────────── */
+    .devices-section {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .section-header h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .devices-list {
+      padding: 0;
+    }
+
+    .device-item {
+      display: grid;
+      grid-template-columns: 12px 1fr auto auto auto;
+      gap: 20px;
+      align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-light);
+      transition: background 0.15s ease;
+    }
+
+    .device-item:last-child {
+      border-bottom: none;
+    }
+
+    .device-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .device-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-tertiary);
+    }
+
+    .device-status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
+    }
+
+    .device-status-dot.fault {
+      background: var(--danger);
+      box-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
+      animation: pulse 2s ease infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .device-info h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .device-info p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .device-state {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 6px 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 20px;
+    }
+
+    .device-state.running {
+      background: rgba(52, 199, 89, 0.12);
+      color: var(--success);
+    }
+
+    .device-state.stopped {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+
+    .device-state.fault {
+      background: rgba(255, 59, 48, 0.12);
+      color: var(--danger);
+    }
+
+    .device-state.offline {
+      background: var(--bg-secondary);
+      color: var(--text-tertiary);
+    }
+
+    .device-state.decommissioned {
+      background: rgba(255, 149, 0, 0.12);
+      color: var(--warning);
+    }
+
+    .device-item.decommissioned {
+      opacity: 0.6;
+    }
+
+    .device-status-dot.decommissioned {
+      background: var(--warning);
+    }
+
+    .device-decommissioned-notice {
+      color: var(--warning);
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .device-current {
+      text-align: right;
+    }
+
+    .device-current .value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.5px;
+    }
+
+    .device-current .unit {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .empty-state p {
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    /* ─────────────── MODALS ─────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--modal-overlay);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      max-width: 450px;
+      width: 90%;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .modal h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+
+    .modal p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .modal h3 {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .modal-buttons .btn {
+      flex: 1;
+      justify-content: center;
+    }
+
+    /* ─────────────── DEVICE DETAIL PAGE ─────────────── */
+    .device-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 16px;
+      transition: opacity 0.2s ease;
+    }
+
+    .back-link:hover {
+      opacity: 0.7;
+    }
+
+    .device-title h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: -0.5px;
+    }
+
+    .device-title p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    }
+
+    .connection-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .connection-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-tertiary);
+    }
+
+    .connection-badge .dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
+    }
+
+    /* ─────────────── READINGS GRID ─────────────── */
+    .readings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .reading-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      text-align: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .reading-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    .reading-value {
+      font-size: 40px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+      margin-bottom: 4px;
+      letter-spacing: -1px;
+    }
+
+    .reading-unit {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─────────────── STATE DISPLAY ─────────────── */
+    .state-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .state-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 48px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+    }
+
+    .state-indicator.running {
+      background: rgba(52, 199, 89, 0.1);
+    }
+
+    .state-indicator.fault {
+      background: rgba(255, 59, 48, 0.1);
+    }
+
+    .state-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+    }
+
+    .state-icon.running {
+      background: var(--success);
+      box-shadow: 0 0 12px rgba(52, 199, 89, 0.5);
+    }
+
+    .state-icon.stopped {
+      background: var(--text-tertiary);
+    }
+
+    .state-icon.fault {
+      background: var(--danger);
+      box-shadow: 0 0 12px rgba(255, 59, 48, 0.5);
+      animation: blink 1s steps(1) infinite;
+    }
+
+    .state-text {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 2px;
       text-transform: uppercase;
     }
-    .status-badge.online { background: rgba(0, 255, 136, 0.15); color: var(--status-running); }
-    .status-badge.offline { background: rgba(255, 71, 87, 0.15); color: var(--status-fault); }
-    .status-badge.active { background: rgba(0, 212, 255, 0.15); color: var(--accent-cyan); }
-    .status-badge.inactive { background: rgba(107, 122, 143, 0.15); color: var(--text-secondary); }
-    .uptime-display { text-align: center; padding: 16px; }
-    .uptime-value { font-size: 28px; font-weight: 500; letter-spacing: 2px; }
-    .uptime-label { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
-    .fault-banner {
-      display: none; background: rgba(255, 71, 87, 0.15); border: 1px solid var(--status-fault);
-      border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 20px;
-    }
-    .fault-banner.visible { display: block; }
-    .fault-banner-text { color: var(--status-fault); font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 13px; }
 
-    /* Landing page styles */
-    .landing-page {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 80vh; text-align: center; padding: 40px 20px;
-    }
-    .landing-page .logo-icon { width: 80px; height: 80px; font-size: 32px; margin-bottom: 20px; }
-    .landing-page h1 { font-family: 'Chakra Petch', sans-serif; font-size: 48px; margin-bottom: 10px; }
-    .landing-page h1 span { color: var(--accent-cyan); }
-    .landing-page .tagline { color: var(--text-secondary); font-size: 16px; margin-bottom: 40px; }
-    .device-input-container {
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: 30px; max-width: 450px; width: 100%;
-    }
-    .device-input-container h2 {
-      font-family: 'Chakra Petch', sans-serif; font-size: 16px; margin-bottom: 20px;
-      color: var(--text-primary);
-    }
-    .form-group { margin-bottom: 16px; text-align: left; }
-    .form-group label {
-      display: block; font-size: 11px; color: var(--text-secondary);
-      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
-    }
-    .form-input {
-      width: 100%; padding: 12px 14px; font-size: 14px;
-      background: var(--bg-secondary); border: 1px solid var(--border-color);
-      border-radius: 6px; color: var(--text-primary); font-family: 'JetBrains Mono', monospace;
-    }
-    .form-input:focus { outline: none; border-color: var(--accent-cyan); }
-    .form-input::placeholder { color: var(--text-muted); }
-    .form-input.device-input {
-      font-size: 18px; text-align: center; letter-spacing: 2px; text-transform: uppercase;
-      border-width: 2px;
-    }
-    .form-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
-    .broker-toggle {
-      display: flex; gap: 8px; margin-bottom: 20px;
-    }
-    .broker-toggle button {
-      flex: 1; padding: 10px; border: 1px solid var(--border-color);
-      background: var(--bg-secondary); color: var(--text-secondary);
-      border-radius: 6px; cursor: pointer; font-family: 'Chakra Petch', sans-serif;
-      font-size: 12px; text-transform: uppercase; transition: all 0.2s;
-    }
-    .broker-toggle button.active {
-      border-color: var(--accent-cyan); color: var(--accent-cyan);
-      background: rgba(0, 212, 255, 0.1);
-    }
-    .broker-toggle button:hover { border-color: var(--accent-cyan); }
-    .custom-broker { display: none; }
-    .custom-broker.visible { display: block; }
-    .btn-connect {
-      width: 100%; margin-top: 20px; background: linear-gradient(135deg, var(--accent-cyan), #0088aa);
-      color: var(--bg-primary);
-    }
-    .device-input-hint {
-      font-size: 11px; color: var(--text-muted); margin-top: 12px; text-align: center;
-    }
-    .last-seen { font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: center; }
-    .last-seen.stale { color: var(--status-fault); }
-    .broker-info {
-      font-size: 10px; color: var(--text-muted); margin-top: 8px;
-      padding: 8px; background: var(--bg-secondary); border-radius: 4px;
+    .state-text.running { color: var(--success); }
+    .state-text.stopped { color: var(--text-tertiary); }
+    .state-text.fault { color: var(--danger); }
+
+    /* ─────────────── CONTROLS ─────────────── */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
     }
 
-    /* Modal styles */
-    .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;
+    .control-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
     }
-    .modal-overlay.visible { display: flex; }
-    .modal {
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      border-radius: 12px; padding: 30px; max-width: 450px; width: 90%;
+
+    .control-card h3 {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-light);
     }
-    .modal h2 {
-      font-family: 'Chakra Petch', sans-serif; font-size: 18px; margin-bottom: 20px;
-      color: var(--text-primary);
+
+    .control-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-    .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
-    .modal-buttons button { flex: 1; }
-    .btn-secondary {
-      background: var(--bg-secondary); color: var(--text-primary);
+
+    .control-buttons .btn {
+      width: 100%;
+      padding: 14px;
+      justify-content: center;
+    }
+
+    .info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .info-item:last-child {
+      border-bottom: none;
+    }
+
+    .info-item .label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .info-item .value {
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      border-radius: 12px;
+    }
+
+    .status-badge.online {
+      background: rgba(52, 199, 89, 0.12);
+      color: var(--success);
+    }
+
+    .status-badge.offline {
+      background: var(--bg-secondary);
+      color: var(--text-tertiary);
+    }
+
+    .status-badge.active {
+      background: rgba(0, 122, 255, 0.12);
+      color: var(--accent);
+    }
+
+    .status-badge.inactive {
+      background: var(--bg-secondary);
+      color: var(--text-tertiary);
+    }
+
+    /* ─────────────── ADMIN BADGE ─────────────── */
+    .admin-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: var(--accent);
+      color: white;
+      margin-left: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .device-owner {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    #admin-toggle .btn {
+      margin-right: 8px;
+    }
+
+    /* ─────────────── USER MANAGEMENT TABLE ─────────────── */
+    .user-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .user-table th,
+    .user-table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .user-table th {
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .user-table tr:hover {
+      background: var(--bg-secondary);
+    }
+
+    .user-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .user-role-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .user-role-badge.admin {
+      background: var(--accent);
+      color: white;
+    }
+
+    .user-role-badge.user {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+
+    .user-status-active {
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    .user-status-inactive {
+      color: var(--danger);
+      font-weight: 500;
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .user-actions .btn {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* ─────────────── SETTINGS PAGE ─────────────── */
+    .settings-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .settings-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      display: inline-block;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--bg-secondary);
       border: 1px solid var(--border-color);
+      border-radius: 28px;
+      transition: 0.3s;
     }
 
-    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-    @media (max-width: 600px) {
-      .current-grid { grid-template-columns: 1fr; }
-      .landing-page h1 { font-size: 32px; }
-      .form-row { grid-template-columns: 1fr; }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: var(--text-tertiary);
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .toggle-slider {
+      background-color: var(--success);
+      border-color: var(--success);
+    }
+
+    input:checked + .toggle-slider:before {
+      background-color: white;
+      transform: translateX(22px);
+    }
+
+    /* Device preference item */
+    .device-pref-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+    }
+
+    .device-pref-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .device-pref-info h4 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .device-pref-info p {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Notification history item */
+    .notification-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      border-left: 3px solid var(--danger);
+    }
+
+    .notification-item .notif-content {
+      flex: 1;
+    }
+
+    .notification-item .notif-device {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .notification-item .notif-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    /* ─────────────── THEME TOGGLE ─────────────── */
+    .theme-toggle {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: var(--bg-tertiary);
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 18px;
+      color: var(--text-primary);
+    }
+
+    .theme-toggle:hover {
+      background: var(--border-color);
+      transform: scale(1.05);
+    }
+
+    .theme-toggle:active {
+      transform: scale(0.95);
+    }
+
+    .theme-toggle .icon-sun,
+    .theme-toggle .icon-moon {
+      display: none;
+      line-height: 1;
+    }
+
+    /* Light mode: show moon icon (to switch to dark) */
+    [data-theme="light"] .theme-toggle .icon-moon,
+    :root:not([data-theme]) .theme-toggle .icon-moon {
+      display: block;
+      color: #1d1d1f;
+    }
+
+    /* Dark mode: show sun icon (to switch to light) */
+    [data-theme="dark"] .theme-toggle .icon-sun {
+      display: block;
+      color: #ffd60a;
+    }
+
+    /* ─────────────── LOADING SPINNER ─────────────── */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border-light);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ─────────────── RESPONSIVE ─────────────── */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+
+      .header {
+        flex-direction: column;
+        gap: 16px;
+        padding: 12px 16px;
+        border-radius: var(--radius-md);
+      }
+
+      .landing-hero {
+        padding: 48px 20px;
+      }
+
+      .landing-hero h1 {
+        font-size: 32px;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .device-item {
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .device-state,
+      .device-current,
+      .device-item .btn {
+        grid-column: 2;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .readings-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .state-indicator {
+        padding: 16px 32px;
+      }
+
+      .state-text {
+        font-size: 18px;
+      }
+
+      .auth-container {
+        margin: 24px auto;
+      }
+
+      .auth-card {
+        padding: 24px;
+      }
     }
   </style>
 </head>
 <body>
+
   <!-- Landing Page -->
-  <div class="container landing-page" id="landingPage">
-    <div class="logo-icon">FL</div>
-    <h1>Field<span>Link</span></h1>
-    <p class="tagline">Industrial Pump Monitoring and Control</p>
-    <div class="device-input-container">
-      <h2>Connect to Your Device</h2>
+  <div id="page-landing" class="page active">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <nav class="nav-links">
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <a href="#" class="btn btn-primary" onclick="showPage('login')">Sign In</a>
+        </nav>
+      </header>
 
-      <div class="form-group">
-        <label>Device ID</label>
-        <input type="text" class="form-input device-input" id="deviceIdInput" placeholder="e.g., FL-A1B2C3" maxlength="12">
+      <div class="landing-hero">
+        <div class="logo-icon">FL</div>
+        <h1>Field<span>Logic</span></h1>
+        <p class="tagline">Industrial Pump Monitoring and Control Platform</p>
+        <div class="landing-buttons">
+          <button class="btn btn-primary" onclick="showPage('login')">Sign In</button>
+        </div>
       </div>
 
-      <div class="broker-toggle">
-        <button id="btnDefaultBroker" class="active" onclick="setBrokerMode('default')">Default Cloud</button>
-        <button id="btnCustomBroker" onclick="setBrokerMode('custom')">Custom Broker</button>
+      <div class="features">
+        <div class="feature-card">
+          <div class="feature-icon">&#9889;</div>
+          <h3>Real-Time Monitoring</h3>
+          <p>Monitor your pump controllers in real-time with live current readings and status updates.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128274;</div>
+          <h3>Secure Cloud</h3>
+          <p>Your devices connect securely via encrypted MQTT. Access from anywhere, anytime.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128241;</div>
+          <h3>Mobile Ready</h3>
+          <p>Install as an app on your phone. Get instant access to your devices on the go.</p>
+        </div>
       </div>
+    </div>
+  </div>
 
-      <div class="custom-broker" id="customBrokerFields">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Broker Host</label>
-            <input type="text" class="form-input" id="brokerHost" placeholder="broker.example.com">
-          </div>
-          <div class="form-group">
-            <label>Port</label>
-            <input type="number" class="form-input" id="brokerPort" placeholder="8884" value="8884">
+  <!-- Login Page -->
+  <div id="page-login" class="page">
+    <div class="container">
+      <header class="header">
+        <a href="#" onclick="showPage('landing')" class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </a>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+          <span class="icon-sun">&#9728;</span>
+          <span class="icon-moon">&#9790;</span>
+        </button>
+      </header>
+
+      <div class="auth-container">
+        <div class="auth-card">
+          <h2>Welcome Back</h2>
+          <p class="auth-subtitle">Sign in to access your devices</p>
+
+          <div id="login-error" class="alert alert-error" style="display: none;"></div>
+
+          <form id="login-form" onsubmit="handleLogin(event)">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" class="form-input" id="login-email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" class="form-input" id="login-password" placeholder="Your password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+          </form>
+
+          <p class="auth-footer">
+            <a href="#" onclick="handleForgotPassword()">Forgot your password?</a>
+          </p>
+          <p class="auth-footer">
+            Don't have an account? <a href="#" onclick="showPage('register')">Create one</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Page -->
+  <div id="page-register" class="page">
+    <div class="container">
+      <header class="header">
+        <a href="#" onclick="showPage('landing')" class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </a>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+          <span class="icon-sun">&#9728;</span>
+          <span class="icon-moon">&#9790;</span>
+        </button>
+      </header>
+
+      <div class="auth-container">
+        <div class="auth-card">
+          <h2>Create Account</h2>
+          <p class="auth-subtitle">Start monitoring your devices today</p>
+
+          <div id="register-error" class="alert alert-error" style="display: none;"></div>
+          <div id="register-success" class="alert alert-success" style="display: none;"></div>
+
+          <form id="register-form" onsubmit="handleRegister(event)">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" class="form-input" id="register-name" placeholder="John Smith" required>
+            </div>
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" class="form-input" id="register-email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" class="form-input" id="register-password" placeholder="Minimum 6 characters" minlength="6" required>
+            </div>
+            <div class="form-group">
+              <label>Confirm Password</label>
+              <input type="password" class="form-input" id="register-password2" placeholder="Confirm your password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="register-btn">Create Account</button>
+          </form>
+
+          <p class="auth-footer">
+            Already have an account? <a href="#" onclick="showPage('login')">Sign in</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Page -->
+  <div id="page-dashboard" class="page">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <div class="user-menu">
+          <span class="user-email" id="user-email"></span>
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('firmware')" title="Firmware Management">&#128230;</button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('settings')" title="Settings">&#9881;</button>
+          <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+        </div>
+      </header>
+
+      <div class="dashboard-header">
+        <div>
+          <h1 id="dashboard-title">My Devices</h1>
+          <div id="admin-toggle" style="display: none; margin-top: 8px;">
+            <button class="btn btn-small" id="btn-my-devices" onclick="setAdminView(false)" style="opacity: 0.5;">My Devices</button>
+            <button class="btn btn-small btn-primary" id="btn-all-devices" onclick="setAdminView(true)">All Devices (Admin)</button>
+            <button class="btn btn-small btn-secondary" id="btn-registry" onclick="showRegistryModal()" style="margin-left: 10px;">Device Registry</button>
+            <button class="btn btn-small btn-secondary" onclick="showPage('users')">&#128101; User Management</button>
           </div>
         </div>
+        <button class="btn btn-primary" onclick="showAddDeviceModal()">+ Add Device</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Devices</div>
+          <div class="stat-value" id="stat-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Online</div>
+          <div class="stat-value" id="stat-online">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Running</div>
+          <div class="stat-value" id="stat-running">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Faults</div>
+          <div class="stat-value" id="stat-faults">0</div>
+        </div>
+      </div>
+
+      <div class="devices-section">
+        <div class="section-header">
+          <h2>Registered Devices</h2>
+        </div>
+        <div id="devices-list" class="devices-list">
+          <div class="loading">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Detail Page -->
+  <div id="page-device" class="page">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <div class="user-menu">
+          <span class="user-email" id="device-user-email"></span>
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('firmware')" title="Firmware Management">&#128230;</button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('settings')" title="Settings">&#9881;</button>
+          <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+        </div>
+      </header>
+
+      <a href="#" class="back-link" onclick="showPage('dashboard')">&#8592; Back to Devices</a>
+
+      <div class="device-detail-header">
+        <div class="device-title">
+          <h1 id="device-name">Device</h1>
+          <p id="device-id-display">ID: ---</p>
+        </div>
+        <div class="connection-badge">
+          <div class="dot" id="device-connection-dot"></div>
+          <span id="device-connection-text">Connecting...</span>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <div class="state-indicator" id="device-state-indicator">
+          <div class="state-icon stopped" id="device-state-icon"></div>
+          <div class="state-text stopped" id="device-state-text">---</div>
+        </div>
+        <p style="margin-top: 16px; font-size: 13px; color: var(--text-secondary);" id="device-last-seen">Waiting for data...</p>
+      </div>
+
+      <div class="readings-grid">
+        <div class="reading-card">
+          <div class="reading-label">Phase A Current</div>
+          <div class="reading-value" id="device-current-a">--</div>
+          <div class="reading-unit">Amps</div>
+        </div>
+        <div class="reading-card">
+          <div class="reading-label">Phase B Current</div>
+          <div class="reading-value" id="device-current-b">--</div>
+          <div class="reading-unit">Amps</div>
+        </div>
+        <div class="reading-card">
+          <div class="reading-label">Phase C Current</div>
+          <div class="reading-value" id="device-current-c">--</div>
+          <div class="reading-unit">Amps</div>
+        </div>
+        <div class="reading-card">
+          <div class="reading-label">Uptime</div>
+          <div class="reading-value" id="device-uptime" style="font-size: 28px;">--:--:--</div>
+          <div class="reading-unit">HH:MM:SS</div>
+        </div>
+      </div>
+
+      <div class="controls-grid">
+        <div class="control-card">
+          <h3>Controls</h3>
+          <div class="control-buttons">
+            <button class="btn btn-success" id="device-btn-start" onclick="sendDeviceCommand('START')">Start Pump</button>
+            <button class="btn btn-danger" id="device-btn-stop" onclick="sendDeviceCommand('STOP')">Stop Pump</button>
+            <button class="btn btn-secondary" id="device-btn-reset" onclick="sendDeviceCommand('RESET')">Reset Fault</button>
+          </div>
+        </div>
+        <div class="control-card">
+          <h3>System Info</h3>
+          <div class="info-list">
+            <div class="info-item">
+              <span class="label">Sensor</span>
+              <span class="status-badge offline" id="device-sensor-status">OFFLINE</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Command</span>
+              <span class="status-badge inactive" id="device-cmd-status">INACTIVE</span>
+            </div>
+            <div class="info-item">
+              <span class="label">Mode</span>
+              <span class="status-badge inactive" id="device-mode-status">---</span>
+            </div>
+          </div>
+        </div>
+        <div class="control-card">
+          <h3>Device Actions</h3>
+          <div class="control-buttons">
+            <button class="btn btn-secondary" onclick="editDeviceName()">Rename Device</button>
+            <button class="btn btn-danger" onclick="confirmRemoveDevice()">Remove Device</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Page -->
+  <div id="page-settings" class="page">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <div class="user-menu">
+          <span class="user-email" id="settings-user-email"></span>
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+        </div>
+      </header>
+
+      <a href="#" class="back-link" onclick="showPage('dashboard')">&#8592; Back to Dashboard</a>
+
+      <h1 style="margin-bottom: 24px; font-size: 28px; font-weight: 700;">Settings</h1>
+
+      <!-- Telegram Link Section -->
+      <div class="settings-card">
+        <h3>Telegram Notifications</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+          Link your Telegram account to receive instant alerts when devices enter fault state.
+        </p>
+
+        <div id="telegram-error" class="alert alert-error" style="display: none;"></div>
+        <div id="telegram-success" class="alert alert-success" style="display: none;"></div>
+
+        <!-- Not Linked State -->
+        <div id="telegram-not-linked">
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
+            <div style="width: 48px; height: 48px; background: var(--bg-secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+              &#9993;
+            </div>
+            <div>
+              <p style="font-weight: 600;">Not Connected</p>
+              <p style="font-size: 13px; color: var(--text-secondary);">Link your Telegram to receive alerts</p>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateTelegramCode()" id="btn-link-telegram">
+            Link Telegram Account
+          </button>
+        </div>
+
+        <!-- Link Code State -->
+        <div id="telegram-link-code" style="display: none;">
+          <div style="background: var(--bg-secondary); border-radius: var(--radius-md); padding: 24px; text-align: center; margin-bottom: 20px;">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">Send this code to our Telegram bot:</p>
+            <p style="font-size: 32px; font-weight: 700; letter-spacing: 4px; font-family: monospace;" id="telegram-code-display">------</p>
+            <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 12px;">Code expires in 10 minutes</p>
+          </div>
+
+          <div style="background: var(--bg-tertiary); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px;">
+            <p style="font-weight: 600; margin-bottom: 8px;">How to link:</p>
+            <ol style="margin-left: 20px; font-size: 14px; color: var(--text-secondary); line-height: 1.8;">
+              <li>Open Telegram and search for <strong>@FieldLogicAlertsBot</strong></li>
+              <li>Start a chat and send: <code style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px;">/start <span id="code-inline">------</span></code></li>
+              <li>You'll receive a confirmation message</li>
+            </ol>
+          </div>
+
+          <div style="display: flex; gap: 12px;">
+            <button class="btn btn-secondary" onclick="cancelTelegramLink()">Cancel</button>
+            <button class="btn btn-primary" onclick="checkTelegramLink()" id="btn-check-link">I've Sent the Code</button>
+          </div>
+        </div>
+
+        <!-- Linked State -->
+        <div id="telegram-linked" style="display: none;">
+          <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
+            <div style="width: 48px; height: 48px; background: rgba(52, 199, 89, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--success);">
+              &#10003;
+            </div>
+            <div>
+              <p style="font-weight: 600; color: var(--success);">Connected</p>
+              <p style="font-size: 13px; color: var(--text-secondary);" id="telegram-username-display">@username</p>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-small" onclick="unlinkTelegram()">Unlink Telegram</button>
+        </div>
+      </div>
+
+      <!-- Device Notification Preferences -->
+      <div class="settings-card" id="notification-prefs-section" style="display: none; margin-top: 24px;">
+        <h3>Device Alerts</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+          Choose which devices send you Telegram alerts when they enter fault state.
+        </p>
+
+        <div id="device-prefs-list">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Notification History -->
+      <div class="settings-card" style="margin-top: 24px;">
+        <h3>Recent Alerts</h3>
+        <div id="notification-history">
+          <p style="color: var(--text-secondary);">No alerts sent yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firmware Management Page -->
+  <div id="page-firmware" class="page">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <div class="user-menu">
+          <span class="user-email" id="firmware-user-email"></span>
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('settings')" title="Settings">&#9881;</button>
+          <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+        </div>
+      </header>
+
+      <a href="#" class="back-link" onclick="showPage('dashboard')">&#8592; Back to Dashboard</a>
+
+      <h1 style="margin-bottom: 24px; font-size: 28px; font-weight: 700;">Firmware Management</h1>
+
+      <div id="firmware-error" class="alert alert-error" style="display: none;"></div>
+      <div id="firmware-success" class="alert alert-success" style="display: none;"></div>
+
+      <!-- Upload New Firmware -->
+      <div class="settings-card">
+        <h3>Upload New Firmware</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+          Upload firmware .bin files for different hardware types. Files will be stored securely in the cloud.
+        </p>
+
+        <form onsubmit="handleFirmwareUpload(event)">
+          <div class="form-group">
+            <label>Hardware Type</label>
+            <select class="form-input" id="firmware-hardware-type" required>
+              <option value="">Select hardware type...</option>
+              <option value="PUMP_ESP32S3">ESP32-S3 Pump Controller</option>
+              <option value="MOTOR_ESP32">ESP32 Motor Controller</option>
+              <option value="SENSOR_ESP8266">ESP8266 Sensor Node</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Firmware Version</label>
+            <input type="text" class="form-input" id="firmware-version" placeholder="e.g., 2.0.1" required>
+            <small style="color: var(--text-secondary);">Use semantic versioning: Major.Minor.Patch</small>
+          </div>
+
+          <div class="form-group">
+            <label>Firmware File (.bin)</label>
+            <input type="file" class="form-input" id="firmware-file" accept=".bin" required>
+            <small style="color: var(--text-secondary);">Build firmware with: platformio run</small>
+          </div>
+
+          <div class="form-group">
+            <label>Changelog (Optional)</label>
+            <textarea class="form-input" id="firmware-changelog" rows="3" placeholder="- Added new features&#10;- Fixed bugs&#10;- Performance improvements"></textarea>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="firmware-critical" style="width: auto;">
+            <label for="firmware-critical" style="margin: 0;">Mark as critical update (force update)</label>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btn-upload-firmware">
+            Upload Firmware
+          </button>
+        </form>
+
+        <div id="upload-progress" style="display: none; margin-top: 20px;">
+          <div style="background: var(--bg-secondary); border-radius: 8px; height: 8px; overflow: hidden;">
+            <div id="upload-progress-bar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.3s;"></div>
+          </div>
+          <p id="upload-progress-text" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">Uploading...</p>
+        </div>
+      </div>
+
+      <!-- Available Firmware Releases -->
+      <div class="settings-card" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">Available Firmware Releases</h3>
+          <button class="btn btn-secondary btn-small" onclick="loadFirmwareReleases()">&#8635; Refresh</button>
+        </div>
+
+        <div id="firmware-releases-list" style="overflow-x: auto;">
+          <p style="color: var(--text-secondary);">Loading firmware releases...</p>
+        </div>
+      </div>
+
+      <!-- Device Firmware Status -->
+      <div class="settings-card" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">Device Firmware Status</h3>
+          <button class="btn btn-secondary btn-small" onclick="loadDeviceFirmwareStatus()">&#8635; Refresh</button>
+        </div>
+
+        <div id="device-firmware-list" style="overflow-x: auto;">
+          <p style="color: var(--text-secondary);">Loading devices...</p>
+        </div>
+      </div>
+
+      <!-- Update History -->
+      <div class="settings-card" style="margin-top: 24px;">
+        <h3>Recent Updates</h3>
+        <div id="update-history-list">
+          <p style="color: var(--text-secondary);">No updates yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management Page (Admin Only) -->
+  <div id="page-users" class="page">
+    <div class="container">
+      <header class="header">
+        <div class="logo">
+          <div class="logo-icon">FL</div>
+          <div class="logo-text">Field<span>Logic</span></div>
+        </div>
+        <div class="user-menu">
+          <span class="user-email" id="users-user-email"></span>
+          <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <span class="icon-sun">&#9728;</span>
+            <span class="icon-moon">&#9790;</span>
+          </button>
+          <button class="btn btn-secondary btn-small" onclick="showPage('settings')" title="Settings">&#9881;</button>
+          <button class="btn btn-secondary btn-small" onclick="handleLogout()">Logout</button>
+        </div>
+      </header>
+
+      <a href="#" class="back-link" onclick="showPage('dashboard')">&#8592; Back to Dashboard</a>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h1 style="font-size: 28px; font-weight: 700; margin: 0;">User Management</h1>
+        <button class="btn btn-primary" onclick="showCreateUserModal()">+ Create User</button>
+      </div>
+
+      <div id="users-error" class="alert alert-error" style="display: none;"></div>
+      <div id="users-success" class="alert alert-success" style="display: none;"></div>
+
+      <!-- User Stats -->
+      <div class="stats-grid" style="margin-bottom: 24px;">
+        <div class="stat-card">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value" id="stat-total-users">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Admins</div>
+          <div class="stat-value" id="stat-admins">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Users</div>
+          <div class="stat-value" id="stat-active-users">0</div>
+        </div>
+      </div>
+
+      <!-- User List -->
+      <div class="settings-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">All Users</h3>
+          <button class="btn btn-secondary btn-small" onclick="loadAllUsers()">&#8635; Refresh</button>
+        </div>
+
+        <div id="users-list" style="overflow-x: auto;">
+          <p style="color: var(--text-secondary);">Loading users...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Push Firmware Modal -->
+  <div class="modal-overlay" id="push-firmware-modal">
+    <div class="modal" style="max-width: 500px;">
+      <h2>Push Firmware Update</h2>
+      <p>Select devices to update to version <strong id="push-firmware-version"></strong></p>
+
+      <div id="push-firmware-error" class="alert alert-error" style="display: none;"></div>
+
+      <div style="margin: 20px 0;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 12px;">
+          <input type="checkbox" id="select-all-devices" onchange="toggleSelectAllDevices()" style="width: auto;">
+          <strong>Select All Online Devices</strong>
+        </label>
+
+        <div id="device-selection-list" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px;">
+          <p style="color: var(--text-secondary);">Loading devices...</p>
+        </div>
+      </div>
+
+      <div id="selected-device-count" style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">
+        0 devices selected
+      </div>
+
+      <div class="modal-buttons">
+        <button type="button" class="btn btn-secondary" onclick="hideModal('push-firmware-modal')">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-push" onclick="confirmPushFirmware()">Push Update</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Device Modal -->
+  <div class="modal-overlay" id="add-device-modal">
+    <div class="modal">
+      <h2>Add New Device</h2>
+      <p>Enter the Device ID found on your FieldLink controller or in the serial output.</p>
+
+      <div id="add-device-error" class="alert alert-error" style="display: none;"></div>
+
+      <form onsubmit="handleAddDevice(event)">
         <div class="form-group">
-          <label>Username</label>
-          <input type="text" class="form-input" id="brokerUser" placeholder="username">
+          <label>Device ID</label>
+          <input type="text" class="form-input" id="add-device-id" placeholder="e.g., FL-A1B2C3" style="text-transform: uppercase;" required>
+        </div>
+        <div class="form-group">
+          <label>Device Name (Optional)</label>
+          <input type="text" class="form-input" id="add-device-name" placeholder="e.g., Borehole Pump 1">
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn btn-secondary" onclick="hideModal('add-device-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Device</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Remove Device Confirmation Modal -->
+  <div class="modal-overlay" id="remove-device-modal">
+    <div class="modal">
+      <h2>Remove Device</h2>
+      <p>Are you sure you want to remove this device from your account? You can add it again later.</p>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="hideModal('remove-device-modal')">Cancel</button>
+        <button class="btn btn-danger" onclick="handleRemoveDevice()">Remove Device</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Registry Modal (Admin Only) -->
+  <div class="modal-overlay" id="registry-modal">
+    <div class="modal" style="max-width: 600px;">
+      <h2>Device Registry</h2>
+      <p>Manage approved devices. Only devices in this registry can be added by users.</p>
+
+      <div id="registry-error" class="alert alert-error" style="display: none;"></div>
+      <div id="registry-success" class="alert alert-success" style="display: none;"></div>
+
+      <form onsubmit="handleAddToRegistry(event)" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+          <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label>Device ID</label>
+            <input type="text" class="form-input" id="registry-device-id" placeholder="FL-XXXXXX" style="text-transform: uppercase;" required>
+          </div>
+          <div class="form-group" style="flex: 1; margin-bottom: 0;">
+            <label>Name</label>
+            <input type="text" class="form-input" id="registry-device-name" placeholder="Device name">
+          </div>
+          <button type="submit" class="btn btn-primary" style="height: 44px;">Add</button>
+        </div>
+      </form>
+
+      <div style="border-top: 1px solid var(--border-light); padding-top: 15px;">
+        <h3 style="margin: 0 0 10px; font-size: 14px; color: var(--text-secondary);">Registered Devices</h3>
+        <div id="registry-list" style="max-height: 300px; overflow-y: auto;">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="modal-buttons" style="margin-top: 20px;">
+        <button class="btn btn-secondary" onclick="hideModal('registry-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Device Modal -->
+  <div class="modal-overlay" id="rename-device-modal">
+    <div class="modal">
+      <h2>Rename Device</h2>
+      <p>Give your device a friendly name for easy identification.</p>
+      <form onsubmit="handleRenameDevice(event)">
+        <div class="form-group">
+          <label>Device Name</label>
+          <input type="text" class="form-input" id="rename-device-name" placeholder="e.g., Borehole Pump 1" required>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn btn-secondary" onclick="hideModal('rename-device-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Reset Password Modal -->
+  <div class="modal-overlay" id="reset-password-modal">
+    <div class="modal">
+      <h2>Reset User Password</h2>
+      <p>Set a new password for <strong id="reset-password-email"></strong></p>
+
+      <div id="reset-password-error" class="alert alert-error" style="display: none;"></div>
+
+      <form onsubmit="handleAdminResetPassword(event)">
+        <input type="hidden" id="reset-password-user-id">
+        <div class="form-group">
+          <label>New Password</label>
+          <input type="password" class="form-input" id="reset-password-new" placeholder="Enter new password" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" class="form-input" id="reset-password-confirm" placeholder="Confirm new password" minlength="6" required>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn btn-secondary" onclick="hideModal('reset-password-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-reset-password">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Create User Modal -->
+  <div class="modal-overlay" id="create-user-modal">
+    <div class="modal">
+      <h2>Create New User</h2>
+      <p>Create a new user account. The user will be able to log in immediately.</p>
+
+      <div id="create-user-error" class="alert alert-error" style="display: none;"></div>
+
+      <form onsubmit="handleAdminCreateUser(event)">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" class="form-input" id="create-user-name" placeholder="Enter full name">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" class="form-input" id="create-user-email" placeholder="Enter email address" required>
         </div>
         <div class="form-group">
           <label>Password</label>
-          <input type="password" class="form-input" id="brokerPass" placeholder="password">
+          <input type="password" class="form-input" id="create-user-password" placeholder="Enter password" minlength="6" required>
         </div>
         <div class="form-group">
-          <label>Protocol</label>
-          <select class="form-input" id="brokerProtocol">
-            <option value="wss">WSS (Secure WebSocket - Port 8884)</option>
-            <option value="ws">WS (WebSocket - Port 8083)</option>
-          </select>
+          <label>Confirm Password</label>
+          <input type="password" class="form-input" id="create-user-password-confirm" placeholder="Confirm password" minlength="6" required>
         </div>
-      </div>
-
-      <div class="broker-info" id="brokerInfo">Using HiveMQ Cloud (Default)</div>
-
-      <button class="btn btn-connect" onclick="connectToDevice()">Connect</button>
-      <p class="device-input-hint">Find your Device ID on the serial output or device label</p>
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+          <input type="checkbox" id="create-user-admin" style="width: auto;">
+          <label for="create-user-admin" style="margin: 0;">Make this user an admin</label>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="btn btn-secondary" onclick="hideModal('create-user-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-create-user">Create User</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <!-- Dashboard -->
-  <div class="container" id="dashboard" style="display: none;">
-    <header class="header">
-      <div class="logo">
-        <div class="logo-icon">FL</div>
-        <div>
-          <div class="logo-text">Field<span>Link</span></div>
-          <div class="device-id" id="displayDeviceId">Device: ---</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <button class="btn-settings" onclick="showSettings()" title="Settings">&#9881;</button>
-        <div class="connection-status">
-          <div class="status-dot" id="mqttStatus"></div>
-          <span id="mqttStatusText">Connecting...</span>
-        </div>
-      </div>
-    </header>
-    <div class="fault-banner" id="faultBanner">
-      <div class="fault-banner-text" id="faultText">FAULT DETECTED</div>
-    </div>
-    <div class="grid">
-      <div class="main">
-        <div class="card">
-          <div class="card-title">Pump Status</div>
-          <div class="state-display">
-            <div class="state-indicator stopped" id="stateIndicator">
-              <div class="state-icon stopped" id="stateIcon"></div>
-              <div class="state-text stopped" id="stateText">---</div>
-            </div>
-          </div>
-          <div class="last-seen" id="lastSeen">Waiting for data...</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Phase Currents</div>
-          <div class="current-grid">
-            <div class="current-card">
-              <div class="current-label">Phase A</div>
-              <div class="current-value" id="currentA">--</div>
-              <div class="current-unit">Amps</div>
-            </div>
-            <div class="current-card">
-              <div class="current-label">Phase B</div>
-              <div class="current-value" id="currentB">--</div>
-              <div class="current-unit">Amps</div>
-            </div>
-            <div class="current-card">
-              <div class="current-label">Phase C</div>
-              <div class="current-value" id="currentC">--</div>
-              <div class="current-unit">Amps</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="side">
-        <div class="card">
-          <div class="card-title">Controls</div>
-          <div class="controls">
-            <button class="btn btn-start" id="btnStart" onclick="sendCommand('START')">Start Pump</button>
-            <button class="btn btn-stop" id="btnStop" onclick="sendCommand('STOP')">Stop Pump</button>
-            <button class="btn btn-reset" id="btnReset" onclick="sendCommand('RESET')">Reset Fault</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">System Info</div>
-          <div class="status-list">
-            <div class="status-item">
-              <span class="status-label">Sensor</span>
-              <span class="status-badge offline" id="sensorStatus">OFFLINE</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Command</span>
-              <span class="status-badge inactive" id="cmdStatus">INACTIVE</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">Mode</span>
-              <span class="status-badge inactive" id="modeStatus">---</span>
-            </div>
-          </div>
-          <div class="uptime-display">
-            <div class="uptime-value" id="uptime">--:--:--</div>
-            <div class="uptime-label">DEVICE UPTIME</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Settings Modal -->
-  <div class="modal-overlay" id="settingsModal">
-    <div class="modal">
-      <h2>Connection Settings</h2>
-      <div class="form-group">
-        <label>Device ID</label>
-        <input type="text" class="form-input" id="modalDeviceId" readonly>
-      </div>
-      <div class="form-group">
-        <label>Broker</label>
-        <input type="text" class="form-input" id="modalBroker" readonly>
-      </div>
-      <div class="modal-buttons">
-        <button class="btn btn-secondary" onclick="hideSettings()">Close</button>
-        <button class="btn btn-stop" onclick="disconnect()">Disconnect</button>
-      </div>
-    </div>
-  </div>
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mqtt@5/dist/mqtt.min.js"></script>
+  <script src="config.js"></script>
   <script>
-    // Default HiveMQ Cloud Configuration
-    const DEFAULT_BROKER = 'wss://a5c598acdbdc4abba053799bcefb73d0.s1.eu.hivemq.cloud:8884/mqtt';
-    const DEFAULT_USER = 'fieldlogicuser1';
-    const DEFAULT_PASS = '@Shadow69';
-
-    let client = null;
-    let isConnected = false;
-    let deviceId = null;
-    let lastDataTime = null;
-    let staleCheckInterval = null;
-    let brokerMode = 'default';
-    let mqttConfig = {
-      broker: DEFAULT_BROKER,
-      user: DEFAULT_USER,
-      pass: DEFAULT_PASS
-    };
-
-    // Load saved settings from localStorage
-    function loadSettings() {
-      try {
-        const saved = localStorage.getItem('fieldlink_settings');
-        if (saved) {
-          const settings = JSON.parse(saved);
-          if (settings.brokerMode) brokerMode = settings.brokerMode;
-          if (settings.mqttConfig) mqttConfig = settings.mqttConfig;
-          if (settings.deviceId) {
-            document.getElementById('deviceIdInput').value = settings.deviceId;
-          }
-          if (brokerMode === 'custom') {
-            setBrokerMode('custom');
-            document.getElementById('brokerHost').value = settings.customHost || '';
-            document.getElementById('brokerPort').value = settings.customPort || '8884';
-            document.getElementById('brokerUser').value = settings.customUser || '';
-            document.getElementById('brokerPass').value = settings.customPass || '';
-            document.getElementById('brokerProtocol').value = settings.customProtocol || 'wss';
-          }
-        }
-      } catch (e) {
-        console.error('Error loading settings:', e);
-      }
-    }
-
-    // Save settings to localStorage
-    function saveSettings() {
-      try {
-        const settings = {
-          deviceId: deviceId,
-          brokerMode: brokerMode,
-          mqttConfig: mqttConfig
-        };
-        if (brokerMode === 'custom') {
-          settings.customHost = document.getElementById('brokerHost').value;
-          settings.customPort = document.getElementById('brokerPort').value;
-          settings.customUser = document.getElementById('brokerUser').value;
-          settings.customPass = document.getElementById('brokerPass').value;
-          settings.customProtocol = document.getElementById('brokerProtocol').value;
-        }
-        localStorage.setItem('fieldlink_settings', JSON.stringify(settings));
-      } catch (e) {
-        console.error('Error saving settings:', e);
-      }
-    }
-
-    // Toggle broker mode
-    function setBrokerMode(mode) {
-      brokerMode = mode;
-      document.getElementById('btnDefaultBroker').classList.toggle('active', mode === 'default');
-      document.getElementById('btnCustomBroker').classList.toggle('active', mode === 'custom');
-      document.getElementById('customBrokerFields').classList.toggle('visible', mode === 'custom');
-
-      if (mode === 'default') {
-        document.getElementById('brokerInfo').textContent = 'Using HiveMQ Cloud (Default)';
+    // ============================================
+    // CREATE SUPABASE CLIENT IMMEDIATELY
+    // ============================================
+    var supabaseClient = null;
+    try {
+      if (window.supabase && window.supabase.createClient) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase client created successfully:', supabaseClient);
       } else {
-        document.getElementById('brokerInfo').textContent = 'Using custom MQTT broker';
+        console.error('Supabase library not available. window.supabase:', window.supabase);
+      }
+    } catch(e) {
+      console.error('Error creating Supabase client:', e);
+    }
+    var currentUser = null;
+    var isAdmin = false;
+    var showAllDevices = false;
+    var devices = [];
+    var mqttClient = null;
+    var currentDeviceId = null;
+    var deviceLastData = {};
+
+    function initSupabase() {
+      // Client should already be created at top of script
+      if (supabaseClient) {
+        console.log('Supabase client ready');
+        return true;
+      }
+      console.error('Supabase client not initialized');
+      return false;
+    }
+
+    // ============================================
+    // ADMIN FUNCTIONALITY
+    // ============================================
+    async function checkIsAdmin() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('user_profiles')
+          .select('is_admin')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (error) {
+          console.log('Profile not found, user is not admin');
+          isAdmin = false;
+        } else {
+          isAdmin = data.is_admin === true;
+        }
+
+        // Show/hide admin toggle
+        const adminToggle = document.getElementById('admin-toggle');
+        const userEmailEl = document.getElementById('user-email');
+        if (isAdmin) {
+          adminToggle.style.display = 'block';
+          userEmailEl.innerHTML = currentUser.email + '<span class="admin-badge">Admin</span>';
+        } else {
+          adminToggle.style.display = 'none';
+          userEmailEl.textContent = currentUser.email;
+        }
+
+        console.log('Is admin:', isAdmin);
+      } catch (e) {
+        console.error('Error checking admin status:', e);
+        isAdmin = false;
       }
     }
 
-    // Get device ID from URL parameter
-    function getDeviceIdFromUrl() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('device') || params.get('id') || params.get('d');
+    function setAdminView(showAll) {
+      showAllDevices = showAll;
+
+      // Update button states
+      const btnMy = document.getElementById('btn-my-devices');
+      const btnAll = document.getElementById('btn-all-devices');
+      const title = document.getElementById('dashboard-title');
+
+      if (showAll) {
+        btnMy.classList.remove('btn-primary');
+        btnMy.style.opacity = '0.5';
+        btnAll.classList.add('btn-primary');
+        btnAll.style.opacity = '1';
+        title.textContent = 'All Devices (Admin View)';
+      } else {
+        btnMy.classList.add('btn-primary');
+        btnMy.style.opacity = '1';
+        btnAll.classList.remove('btn-primary');
+        btnAll.style.opacity = '0.5';
+        title.textContent = 'My Devices';
+      }
+
+      loadDevices();
     }
 
-    // Update URL with device ID
-    function updateUrl(id) {
-      const url = new URL(window.location);
-      url.searchParams.set('device', id);
-      window.history.pushState({}, '', url);
+    // ============================================
+    // AUTHENTICATION
+    // ============================================
+    async function handleForgotPassword() {
+      var email = document.getElementById('login-email').value;
+      if (!email) {
+        alert('Please enter your email address first');
+        return;
+      }
+      try {
+        var result = await supabaseClient.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + window.location.pathname
+        });
+        if (result.error) throw result.error;
+        alert('Password reset email sent! Check your inbox.');
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
     }
 
-    // Build MQTT broker URL from custom fields
-    function buildCustomBrokerUrl() {
-      const protocol = document.getElementById('brokerProtocol').value;
-      const host = document.getElementById('brokerHost').value.trim();
-      const port = document.getElementById('brokerPort').value.trim() || '8884';
-      return protocol + '://' + host + ':' + port + '/mqtt';
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const btn = document.getElementById('login-btn');
+      const errorEl = document.getElementById('login-error');
+
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      errorEl.style.display = 'none';
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+
+        currentUser = data.user;
+        document.getElementById('user-email').textContent = currentUser.email;
+        document.getElementById('device-user-email').textContent = currentUser.email;
+        await checkIsAdmin();
+        showPage('dashboard');
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
     }
 
-    // Connect to device from landing page
-    function connectToDevice() {
-      const input = document.getElementById('deviceIdInput');
-      const id = input.value.trim().toUpperCase();
+    async function handleRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('register-name').value;
+      const email = document.getElementById('register-email').value;
+      const password = document.getElementById('register-password').value;
+      const password2 = document.getElementById('register-password2').value;
+      const btn = document.getElementById('register-btn');
+      const errorEl = document.getElementById('register-error');
+      const successEl = document.getElementById('register-success');
 
-      if (id.length < 4) {
-        input.style.borderColor = 'var(--status-fault)';
-        setTimeout(function() { input.style.borderColor = 'var(--border-color)'; }, 2000);
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      if (password !== password2) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.style.display = 'block';
         return;
       }
 
-      // Build MQTT config based on mode
-      if (brokerMode === 'custom') {
-        const host = document.getElementById('brokerHost').value.trim();
-        if (!host) {
-          alert('Please enter a broker host');
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      try {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: name }
+          }
+        });
+        if (error) throw error;
+
+        successEl.textContent = 'Account created! Please check your email to verify your account.';
+        successEl.style.display = 'block';
+        document.getElementById('register-form').reset();
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    }
+
+    async function handleLogout() {
+      await supabaseClient.auth.signOut();
+      currentUser = null;
+      devices = [];
+      isAdmin = false;
+      showAllDevices = false;
+      disconnectMQTT();
+      showPage('landing');
+    }
+
+    async function checkAuth() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        document.getElementById('user-email').textContent = currentUser.email;
+        document.getElementById('device-user-email').textContent = currentUser.email;
+        await checkIsAdmin();
+        showPage('dashboard');
+      }
+    }
+
+    // ============================================
+    // DEVICES
+    // ============================================
+    async function loadDevices() {
+      const listEl = document.getElementById('devices-list');
+      listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        let query;
+        if (isAdmin && showAllDevices) {
+          // Admin view: get all devices with user email
+          query = supabaseClient
+            .from('devices')
+            .select('*, user_profiles(email, full_name)')
+            .order('created_at', { ascending: false });
+        } else {
+          // Normal view: only user's devices
+          query = supabaseClient
+            .from('devices')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .order('created_at', { ascending: false });
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        devices = data || [];
+        renderDevicesList();
+        updateStats();
+      } catch (error) {
+        console.error('Error loading devices:', error);
+        listEl.innerHTML = '<div class="empty-state"><h3>Error loading devices</h3><p>' + error.message + '</p></div>';
+      }
+    }
+
+    function renderDevicesList() {
+      const listEl = document.getElementById('devices-list');
+
+      if (devices.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <h3>No Devices Yet</h3>
+            <p>Add your first FieldLink device to start monitoring.</p>
+            <button class="btn btn-primary" onclick="showAddDeviceModal()">+ Add Device</button>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = devices.map(device => {
+        const data = deviceLastData[device.device_id] || {};
+        const isDecommissioned = device.decommissioned === true;
+        const isOnline = !isDecommissioned && data.lastSeen && (Date.now() - data.lastSeen < 15000);
+
+        let state, stateClass;
+        if (isDecommissioned) {
+          state = 'DECOMMISSIONED';
+          stateClass = 'decommissioned';
+        } else if (isOnline) {
+          state = data.state || 'STOPPED';
+          stateClass = state.toLowerCase();
+        } else {
+          state = 'OFFLINE';
+          stateClass = 'offline';
+        }
+
+        const currentAvg = isOnline && data.Ia !== undefined
+          ? ((data.Ia + data.Ib + data.Ic) / 3).toFixed(1)
+          : '--';
+
+        // Show owner email in admin view
+        const ownerInfo = (isAdmin && showAllDevices && device.user_profiles)
+          ? `<p class="device-owner">Owner: ${device.user_profiles.email || 'Unknown'}</p>`
+          : '';
+
+        // Show decommissioned notice
+        const decommNotice = isDecommissioned
+          ? `<p class="device-decommissioned-notice">This device has been decommissioned by administrator</p>`
+          : '';
+
+        return `
+          <div class="device-item ${isDecommissioned ? 'decommissioned' : ''}">
+            <div class="device-status-dot ${isDecommissioned ? 'decommissioned' : (isOnline ? (state === 'FAULT' ? 'fault' : 'online') : '')}"></div>
+            <div class="device-info">
+              <h3>${device.name || device.device_id}</h3>
+              <p>${device.device_id}</p>
+              ${ownerInfo}
+              ${decommNotice}
+            </div>
+            <div class="device-state ${stateClass}">${state}</div>
+            <div class="device-current">
+              <span class="value">${currentAvg}</span>
+              <span class="unit">Avg Amps</span>
+            </div>
+            <button class="btn btn-secondary btn-small" onclick="viewDevice('${device.device_id}')" ${isDecommissioned ? 'disabled' : ''}>View</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateStats() {
+      document.getElementById('stat-total').textContent = devices.length;
+
+      let online = 0, running = 0, faults = 0;
+      devices.forEach(device => {
+        const data = deviceLastData[device.device_id] || {};
+        const isOnline = data.lastSeen && (Date.now() - data.lastSeen < 15000);
+        if (isOnline) {
+          online++;
+          if (data.state === 'RUNNING') running++;
+          if (data.state === 'FAULT') faults++;
+        }
+      });
+
+      document.getElementById('stat-online').textContent = online;
+      document.getElementById('stat-running').textContent = running;
+      document.getElementById('stat-faults').textContent = faults;
+    }
+
+    function showAddDeviceModal() {
+      document.getElementById('add-device-id').value = '';
+      document.getElementById('add-device-name').value = '';
+      document.getElementById('add-device-error').style.display = 'none';
+      showModal('add-device-modal');
+    }
+
+    async function handleAddDevice(e) {
+      e.preventDefault();
+      const deviceId = document.getElementById('add-device-id').value.trim().toUpperCase();
+      const deviceName = document.getElementById('add-device-name').value.trim();
+      const errorEl = document.getElementById('add-device-error');
+
+      errorEl.style.display = 'none';
+
+      try {
+        // Check if device exists in registry
+        const { data: registryDevice, error: registryError } = await supabaseClient
+          .from('device_registry')
+          .select('device_id, name')
+          .eq('device_id', deviceId)
+          .single();
+
+        if (registryError || !registryDevice) {
+          throw new Error('Device not found in registry. Please contact your administrator to register this device.');
+        }
+
+        // Check if device already registered to this user
+        const existing = devices.find(d => d.device_id === deviceId);
+        if (existing) {
+          throw new Error('This device is already registered to your account');
+        }
+
+        const { error } = await supabaseClient
+          .from('devices')
+          .insert({
+            user_id: currentUser.id,
+            device_id: deviceId,
+            name: deviceName || registryDevice.name || null
+          });
+
+        if (error) throw error;
+
+        hideModal('add-device-modal');
+        loadDevices();
+
+        // Subscribe to new device
+        if (mqttClient && mqttClient.connected) {
+          mqttClient.subscribe('fieldlink/' + deviceId + '/telemetry');
+        }
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    // ============================================
+    // DEVICE REGISTRY (Admin)
+    // ============================================
+    async function showRegistryModal() {
+      showModal('registry-modal');
+      await loadRegistry();
+    }
+
+    async function loadRegistry() {
+      const listEl = document.getElementById('registry-list');
+      listEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('device_registry')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No devices in registry</p>';
           return;
         }
-        mqttConfig = {
-          broker: buildCustomBrokerUrl(),
-          user: document.getElementById('brokerUser').value.trim(),
-          pass: document.getElementById('brokerPass').value
-        };
-      } else {
-        mqttConfig = {
-          broker: DEFAULT_BROKER,
-          user: DEFAULT_USER,
-          pass: DEFAULT_PASS
-        };
-      }
 
-      updateUrl(id);
-      initDashboard(id);
-    }
-
-    // Handle Enter key on input
-    document.addEventListener('DOMContentLoaded', function() {
-      loadSettings();
-
-      var input = document.getElementById('deviceIdInput');
-      if (input) {
-        input.addEventListener('keypress', function(e) {
-          if (e.key === 'Enter') connectToDevice();
-        });
-      }
-
-      // Check for device ID in URL
-      var urlDeviceId = getDeviceIdFromUrl();
-      if (urlDeviceId) {
-        document.getElementById('deviceIdInput').value = urlDeviceId;
-        // Auto-connect if we have saved settings
-        var saved = localStorage.getItem('fieldlink_settings');
-        if (saved) {
-          connectToDevice();
-        }
-      }
-    });
-
-    // Initialize dashboard with device ID
-    function initDashboard(id) {
-      deviceId = id.toUpperCase();
-      document.getElementById('landingPage').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
-      document.getElementById('displayDeviceId').textContent = 'Device: ' + deviceId;
-      document.title = 'FieldLink - ' + deviceId;
-
-      // Save settings
-      saveSettings();
-
-      // Start stale data checker
-      staleCheckInterval = setInterval(checkStaleData, 5000);
-
-      connect();
-    }
-
-    // Check if data is stale
-    function checkStaleData() {
-      var lastSeenEl = document.getElementById('lastSeen');
-      if (!lastDataTime) {
-        lastSeenEl.textContent = 'Waiting for data...';
-        lastSeenEl.classList.remove('stale');
-        return;
-      }
-
-      var secondsAgo = Math.floor((Date.now() - lastDataTime) / 1000);
-      if (secondsAgo > 10) {
-        lastSeenEl.textContent = 'Last data: ' + secondsAgo + 's ago - Device may be offline';
-        lastSeenEl.classList.add('stale');
-      } else {
-        lastSeenEl.textContent = 'Live data';
-        lastSeenEl.classList.remove('stale');
+        listEl.innerHTML = data.map(device => `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-secondary); border-radius: var(--radius-sm); margin-bottom: 8px;">
+            <div>
+              <strong style="color: var(--accent);">${device.device_id}</strong>
+              <span style="color: var(--text-secondary); margin-left: 10px;">${device.name || 'No name'}</span>
+            </div>
+            <button class="btn btn-small btn-danger" onclick="handleRemoveFromRegistry('${device.device_id}')" style="padding: 5px 10px; font-size: 12px;">Remove</button>
+          </div>
+        `).join('');
+      } catch (error) {
+        listEl.innerHTML = '<p style="color: var(--danger);">Error loading registry: ' + error.message + '</p>';
       }
     }
 
-    function formatUptime(s) {
-      var h = Math.floor(s / 3600);
-      var m = Math.floor((s % 3600) / 60);
-      var sec = s % 60;
-      return h.toString().padStart(2,'0') + ':' + m.toString().padStart(2,'0') + ':' + sec.toString().padStart(2,'0');
-    }
+    async function handleAddToRegistry(e) {
+      e.preventDefault();
+      const deviceId = document.getElementById('registry-device-id').value.trim().toUpperCase();
+      const deviceName = document.getElementById('registry-device-name').value.trim();
+      const errorEl = document.getElementById('registry-error');
+      const successEl = document.getElementById('registry-success');
 
-    function updateState(state) {
-      var s = state.toLowerCase();
-      document.getElementById('stateIndicator').className = 'state-indicator ' + s;
-      document.getElementById('stateIcon').className = 'state-icon ' + s;
-      document.getElementById('stateText').className = 'state-text ' + s;
-      document.getElementById('stateText').textContent = state;
-      document.getElementById('faultBanner').classList.toggle('visible', s === 'fault');
-      document.getElementById('btnStart').disabled = s === 'fault';
-      document.getElementById('btnReset').disabled = s !== 'fault';
-    }
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
 
-    function updateTelemetry(data) {
       try {
-        var t = JSON.parse(data);
-        lastDataTime = Date.now();
+        const { error } = await supabaseClient
+          .from('device_registry')
+          .insert({
+            device_id: deviceId,
+            name: deviceName || null,
+            provisioned_by: currentUser.id
+          });
 
-        document.getElementById('currentA').textContent = parseFloat(t.Ia).toFixed(1);
-        document.getElementById('currentB').textContent = parseFloat(t.Ib).toFixed(1);
-        document.getElementById('currentC').textContent = parseFloat(t.Ic).toFixed(1);
-        updateState(t.state);
-        if (t.fault) document.getElementById('faultText').textContent = 'FAULT: ' + t.fault;
-
-        document.getElementById('sensorStatus').textContent = t.sensor ? 'ONLINE' : 'OFFLINE';
-        document.getElementById('sensorStatus').className = 'status-badge ' + (t.sensor ? 'online' : 'offline');
-        document.getElementById('cmdStatus').textContent = t.cmd ? 'ACTIVE' : 'INACTIVE';
-        document.getElementById('cmdStatus').className = 'status-badge ' + (t.cmd ? 'active' : 'inactive');
-
-        // Mode indicator
-        if (t.mode) {
-          document.getElementById('modeStatus').textContent = t.mode;
-          document.getElementById('modeStatus').className = 'status-badge ' + (t.mode === 'REMOTE' ? 'active' : 'inactive');
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error('Device ID already exists in registry');
+          }
+          throw error;
         }
 
-        document.getElementById('uptime').textContent = formatUptime(t.uptime);
-        document.getElementById('lastSeen').textContent = 'Live data';
-        document.getElementById('lastSeen').classList.remove('stale');
-      } catch (e) {
-        console.error('Parse error:', e);
+        successEl.textContent = 'Device added to registry';
+        successEl.style.display = 'block';
+        document.getElementById('registry-device-id').value = '';
+        document.getElementById('registry-device-name').value = '';
+        await loadRegistry();
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
       }
     }
 
-    function sendCommand(cmd) {
-      if (client && isConnected && deviceId) {
-        var topic = 'fieldlink/' + deviceId + '/command';
-        client.publish(topic, cmd);
-        console.log('Sent to ' + topic + ':', cmd);
+    async function handleRemoveFromRegistry(deviceId) {
+      try {
+        // Check how many users have this device registered
+        const { data: userDevices, error: countError } = await supabaseClient
+          .from('devices')
+          .select('id, user_id')
+          .eq('device_id', deviceId);
+
+        if (countError) throw countError;
+
+        const userCount = userDevices ? userDevices.length : 0;
+
+        let confirmMsg = 'Remove ' + deviceId + ' from registry?';
+        if (userCount > 0) {
+          confirmMsg = 'WARNING: ' + deviceId + ' is registered by ' + userCount + ' user(s).\n\n' +
+            'Removing will mark their device as DECOMMISSIONED.\n\n' +
+            'Continue?';
+        }
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        // Mark all user devices as decommissioned
+        if (userCount > 0) {
+          const { error: decommError } = await supabaseClient
+            .from('devices')
+            .update({
+              decommissioned: true,
+              decommissioned_at: new Date().toISOString()
+            })
+            .eq('device_id', deviceId);
+
+          if (decommError) throw decommError;
+        }
+
+        // Remove from registry
+        const { error } = await supabaseClient
+          .from('device_registry')
+          .delete()
+          .eq('device_id', deviceId);
+
+        if (error) throw error;
+
+        await loadRegistry();
+
+        if (userCount > 0) {
+          alert('Device decommissioned. ' + userCount + ' user(s) will see their device marked as decommissioned.');
+        }
+      } catch (error) {
+        alert('Error removing device: ' + error.message);
+      }
+    }
+
+    function viewDevice(deviceId) {
+      currentDeviceId = deviceId;
+      const device = devices.find(d => d.device_id === deviceId);
+
+      document.getElementById('device-name').textContent = device.name || deviceId;
+      document.getElementById('device-id-display').textContent = 'ID: ' + deviceId;
+      document.getElementById('rename-device-name').value = device.name || '';
+
+      // Reset UI
+      updateDeviceUI({});
+
+      showPage('device');
+
+      // Subscribe specifically to this device if not already
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.subscribe('fieldlink/' + deviceId + '/telemetry');
+      }
+    }
+
+    function updateDeviceUI(data) {
+      const isOnline = data.lastSeen && (Date.now() - data.lastSeen < 15000);
+
+      // Connection status
+      const dot = document.getElementById('device-connection-dot');
+      const text = document.getElementById('device-connection-text');
+      if (isOnline) {
+        dot.classList.add('connected');
+        text.textContent = 'Connected';
       } else {
-        alert('Not connected to device');
+        dot.classList.remove('connected');
+        text.textContent = mqttClient && mqttClient.connected ? 'Waiting for data...' : 'Connecting...';
+      }
+
+      // State
+      const state = data.state || 'STOPPED';
+      const stateClass = state.toLowerCase();
+      document.getElementById('device-state-indicator').className = 'state-indicator ' + stateClass;
+      document.getElementById('device-state-icon').className = 'state-icon ' + stateClass;
+      document.getElementById('device-state-text').className = 'state-text ' + stateClass;
+      document.getElementById('device-state-text').textContent = isOnline ? state : '---';
+
+      // Currents
+      document.getElementById('device-current-a').textContent = data.Ia !== undefined ? data.Ia.toFixed(1) : '--';
+      document.getElementById('device-current-b').textContent = data.Ib !== undefined ? data.Ib.toFixed(1) : '--';
+      document.getElementById('device-current-c').textContent = data.Ic !== undefined ? data.Ic.toFixed(1) : '--';
+
+      // Uptime
+      if (data.uptime !== undefined) {
+        const h = Math.floor(data.uptime / 3600);
+        const m = Math.floor((data.uptime % 3600) / 60);
+        const s = data.uptime % 60;
+        document.getElementById('device-uptime').textContent =
+          h.toString().padStart(2, '0') + ':' +
+          m.toString().padStart(2, '0') + ':' +
+          s.toString().padStart(2, '0');
+      } else {
+        document.getElementById('device-uptime').textContent = '--:--:--';
+      }
+
+      // Status badges
+      const sensorEl = document.getElementById('device-sensor-status');
+      sensorEl.textContent = data.sensor ? 'ONLINE' : 'OFFLINE';
+      sensorEl.className = 'status-badge ' + (data.sensor ? 'online' : 'offline');
+
+      const cmdEl = document.getElementById('device-cmd-status');
+      cmdEl.textContent = data.cmd ? 'ACTIVE' : 'INACTIVE';
+      cmdEl.className = 'status-badge ' + (data.cmd ? 'active' : 'inactive');
+
+      const modeEl = document.getElementById('device-mode-status');
+      if (data.mode) {
+        modeEl.textContent = data.mode;
+        modeEl.className = 'status-badge ' + (data.mode === 'REMOTE' ? 'active' : 'inactive');
+      }
+
+      // Last seen
+      if (data.lastSeen) {
+        const secondsAgo = Math.floor((Date.now() - data.lastSeen) / 1000);
+        const lastSeenEl = document.getElementById('device-last-seen');
+        if (secondsAgo > 10) {
+          lastSeenEl.textContent = 'Last data: ' + secondsAgo + 's ago';
+          lastSeenEl.style.color = 'var(--warning)';
+        } else {
+          lastSeenEl.textContent = 'Live data';
+          lastSeenEl.style.color = 'var(--success)';
+        }
+      }
+
+      // Button states
+      document.getElementById('device-btn-start').disabled = state === 'FAULT' || !isOnline;
+      document.getElementById('device-btn-reset').disabled = state !== 'FAULT' || !isOnline;
+    }
+
+    function sendDeviceCommand(cmd) {
+      if (mqttClient && mqttClient.connected && currentDeviceId) {
+        const topic = 'fieldlink/' + currentDeviceId + '/command';
+        mqttClient.publish(topic, cmd);
+        console.log('Sent command:', topic, cmd);
       }
     }
 
-    function connect() {
-      if (!deviceId) return;
+    function editDeviceName() {
+      const device = devices.find(d => d.device_id === currentDeviceId);
+      document.getElementById('rename-device-name').value = device.name || '';
+      showModal('rename-device-modal');
+    }
 
-      document.getElementById('mqttStatusText').textContent = 'Connecting...';
-      console.log('Connecting to:', mqttConfig.broker);
+    async function handleRenameDevice(e) {
+      e.preventDefault();
+      const newName = document.getElementById('rename-device-name').value.trim();
 
-      client = mqtt.connect(mqttConfig.broker, {
-        username: mqttConfig.user,
-        password: mqttConfig.pass,
-        clientId: 'dashboard_' + deviceId + '_' + Math.random().toString(16).substr(2, 8),
+      try {
+        const { error } = await supabaseClient
+          .from('devices')
+          .update({ name: newName })
+          .eq('device_id', currentDeviceId)
+          .eq('user_id', currentUser.id);
+
+        if (error) throw error;
+
+        // Update local data
+        const device = devices.find(d => d.device_id === currentDeviceId);
+        if (device) device.name = newName;
+
+        document.getElementById('device-name').textContent = newName || currentDeviceId;
+        hideModal('rename-device-modal');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function confirmRemoveDevice() {
+      showModal('remove-device-modal');
+    }
+
+    async function handleRemoveDevice() {
+      try {
+        let query = supabaseClient
+          .from('devices')
+          .delete()
+          .eq('device_id', currentDeviceId);
+
+        // Only filter by user_id if not admin viewing all devices
+        if (!isAdmin || !showAllDevices) {
+          query = query.eq('user_id', currentUser.id);
+        }
+
+        const { error } = await query;
+
+        if (error) throw error;
+
+        hideModal('remove-device-modal');
+        showPage('dashboard');
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // ============================================
+    // MQTT
+    // ============================================
+    function connectMQTT() {
+      if (mqttClient && mqttClient.connected) return;
+
+      console.log('Connecting to MQTT...');
+      mqttClient = mqtt.connect(MQTT_BROKER_URL, {
+        username: MQTT_USERNAME,
+        password: MQTT_PASSWORD,
+        clientId: 'fieldlogic_' + currentUser.id.substring(0, 8) + '_' + Math.random().toString(16).substr(2, 8),
         reconnectPeriod: 5000
       });
 
-      client.on('connect', function() {
-        isConnected = true;
-        document.getElementById('mqttStatus').classList.add('connected');
-        document.getElementById('mqttStatusText').textContent = 'Connected';
-
-        var topic = 'fieldlink/' + deviceId + '/telemetry';
-        client.subscribe(topic, function(err) {
-          if (!err) {
-            console.log('Subscribed to:', topic);
-          }
+      mqttClient.on('connect', function() {
+        console.log('MQTT connected');
+        // Subscribe to all user's devices
+        devices.forEach(device => {
+          mqttClient.subscribe('fieldlink/' + device.device_id + '/telemetry');
         });
       });
 
-      client.on('message', function(topic, msg) {
-        if (topic === 'fieldlink/' + deviceId + '/telemetry') {
-          updateTelemetry(msg.toString());
+      mqttClient.on('message', function(topic, message) {
+        try {
+          const parts = topic.split('/');
+          const deviceId = parts[1];
+          const data = JSON.parse(message.toString());
+
+          // Get previous state before updating
+          const previousState = deviceLastData[deviceId]?.state;
+          const currentState = data.state;
+
+          data.lastSeen = Date.now();
+          deviceLastData[deviceId] = data;
+
+          // FAULT DETECTION: Trigger notification if state changed to FAULT
+          if (currentState === 'FAULT' && previousState !== 'FAULT') {
+            console.log('FAULT detected on device:', deviceId);
+            triggerFaultNotification(deviceId);
+          }
+
+          // Update dashboard list
+          renderDevicesList();
+          updateStats();
+
+          // Update device detail page if viewing this device
+          if (currentDeviceId === deviceId) {
+            updateDeviceUI(data);
+          }
+        } catch (e) {
+          console.error('MQTT message error:', e);
         }
       });
 
-      client.on('close', function() {
-        isConnected = false;
-        document.getElementById('mqttStatus').classList.remove('connected');
-        document.getElementById('mqttStatusText').textContent = 'Disconnected';
-      });
-
-      client.on('reconnect', function() {
-        document.getElementById('mqttStatusText').textContent = 'Reconnecting...';
-      });
-
-      client.on('error', function(err) {
-        console.error('MQTT Error:', err);
-        document.getElementById('mqttStatusText').textContent = 'Error';
+      mqttClient.on('error', function(err) {
+        console.error('MQTT error:', err);
       });
     }
 
-    function showSettings() {
-      document.getElementById('modalDeviceId').value = deviceId;
-      document.getElementById('modalBroker').value = mqttConfig.broker;
-      document.getElementById('settingsModal').classList.add('visible');
-    }
-
-    function hideSettings() {
-      document.getElementById('settingsModal').classList.remove('visible');
-    }
-
-    function disconnect() {
-      if (client) {
-        client.end();
-        client = null;
+    function disconnectMQTT() {
+      if (mqttClient) {
+        mqttClient.end();
+        mqttClient = null;
       }
-      isConnected = false;
-      if (staleCheckInterval) {
-        clearInterval(staleCheckInterval);
-      }
-      document.getElementById('dashboard').style.display = 'none';
-      document.getElementById('landingPage').style.display = 'flex';
-      hideSettings();
     }
 
-    // Register Service Worker for PWA
+    // ============================================
+    // TELEGRAM NOTIFICATIONS
+    // ============================================
+    var pendingTelegramCode = null;
+    const NOTIFICATION_ENDPOINT = 'https://fast-fox-18.voltageza.deno.net/notify';
+
+    async function triggerFaultNotification(deviceId) {
+      if (!currentUser) return;
+
+      try {
+        const device = devices.find(d => d.device_id === deviceId);
+        const deviceName = device?.name || deviceId;
+
+        console.log('Sending fault notification for:', deviceName);
+
+        const response = await fetch(NOTIFICATION_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser.id,
+            device_id: deviceId,
+            device_name: deviceName,
+            notification_type: 'fault'
+          })
+        });
+
+        const result = await response.json();
+        console.log('Notification result:', result);
+      } catch (e) {
+        console.error('Error sending notification:', e);
+      }
+    }
+
+    async function loadTelegramStatus() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('user_profiles')
+          .select('telegram_chat_id, telegram_username, telegram_verified')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data.telegram_verified && data.telegram_chat_id) {
+          showTelegramLinked(data.telegram_username || 'Linked');
+          await loadNotificationPreferences();
+        } else {
+          showTelegramNotLinked();
+        }
+      } catch (e) {
+        console.error('Error loading Telegram status:', e);
+        showTelegramNotLinked();
+      }
+    }
+
+    function showTelegramNotLinked() {
+      document.getElementById('telegram-not-linked').style.display = 'block';
+      document.getElementById('telegram-link-code').style.display = 'none';
+      document.getElementById('telegram-linked').style.display = 'none';
+      document.getElementById('notification-prefs-section').style.display = 'none';
+    }
+
+    function showTelegramLinkCode(code) {
+      document.getElementById('telegram-not-linked').style.display = 'none';
+      document.getElementById('telegram-link-code').style.display = 'block';
+      document.getElementById('telegram-linked').style.display = 'none';
+      document.getElementById('telegram-code-display').textContent = code;
+      document.getElementById('code-inline').textContent = code;
+    }
+
+    function showTelegramLinked(username) {
+      document.getElementById('telegram-not-linked').style.display = 'none';
+      document.getElementById('telegram-link-code').style.display = 'none';
+      document.getElementById('telegram-linked').style.display = 'block';
+      document.getElementById('telegram-username-display').textContent = username;
+      document.getElementById('notification-prefs-section').style.display = 'block';
+    }
+
+    function generateRandomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    async function generateTelegramCode() {
+      const btn = document.getElementById('btn-link-telegram');
+      const errorEl = document.getElementById('telegram-error');
+      errorEl.style.display = 'none';
+
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+
+      try {
+        const code = generateRandomCode();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+        // Delete any existing codes for this user
+        await supabaseClient
+          .from('telegram_link_codes')
+          .delete()
+          .eq('user_id', currentUser.id);
+
+        // Insert new code
+        const { error } = await supabaseClient
+          .from('telegram_link_codes')
+          .insert({
+            user_id: currentUser.id,
+            code: code,
+            expires_at: expiresAt,
+            used: false
+          });
+
+        if (error) throw error;
+
+        pendingTelegramCode = code;
+        showTelegramLinkCode(code);
+      } catch (e) {
+        console.error('Error generating code:', e);
+        errorEl.textContent = 'Failed to generate code. Please try again.';
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Link Telegram Account';
+      }
+    }
+
+    function cancelTelegramLink() {
+      pendingTelegramCode = null;
+      showTelegramNotLinked();
+    }
+
+    async function checkTelegramLink() {
+      const btn = document.getElementById('btn-check-link');
+      const errorEl = document.getElementById('telegram-error');
+      const successEl = document.getElementById('telegram-success');
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+
+      try {
+        // Check if user profile has been updated with telegram_chat_id
+        const { data, error } = await supabaseClient
+          .from('user_profiles')
+          .select('telegram_chat_id, telegram_username, telegram_verified')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data.telegram_verified && data.telegram_chat_id) {
+          successEl.textContent = 'Telegram linked successfully!';
+          successEl.style.display = 'block';
+
+          setTimeout(() => {
+            showTelegramLinked(data.telegram_username || 'Linked');
+            loadNotificationPreferences();
+            createDefaultNotificationPreferences();
+          }, 1000);
+        } else {
+          errorEl.textContent = 'Not yet linked. Please send the code to the Telegram bot and try again.';
+          errorEl.style.display = 'block';
+        }
+      } catch (e) {
+        console.error('Error checking link:', e);
+        errorEl.textContent = 'Error checking status. Please try again.';
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "I've Sent the Code";
+      }
+    }
+
+    async function unlinkTelegram() {
+      if (!confirm('Are you sure you want to unlink your Telegram account? You will stop receiving notifications.')) {
+        return;
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('user_profiles')
+          .update({
+            telegram_chat_id: null,
+            telegram_username: null,
+            telegram_verified: false,
+            telegram_linked_at: null
+          })
+          .eq('id', currentUser.id);
+
+        if (error) throw error;
+
+        showTelegramNotLinked();
+      } catch (e) {
+        console.error('Error unlinking Telegram:', e);
+        alert('Failed to unlink Telegram. Please try again.');
+      }
+    }
+
+    async function createDefaultNotificationPreferences() {
+      try {
+        for (const device of devices) {
+          await supabaseClient
+            .from('notification_preferences')
+            .upsert({
+              user_id: currentUser.id,
+              device_id: device.device_id,
+              telegram_fault_enabled: true
+            }, { onConflict: 'user_id,device_id' });
+        }
+      } catch (e) {
+        console.error('Error creating default preferences:', e);
+      }
+    }
+
+    async function loadNotificationPreferences() {
+      const listEl = document.getElementById('device-prefs-list');
+
+      try {
+        const { data: prefs, error } = await supabaseClient
+          .from('notification_preferences')
+          .select('*')
+          .eq('user_id', currentUser.id);
+
+        if (error) throw error;
+
+        const prefsMap = {};
+        (prefs || []).forEach(p => { prefsMap[p.device_id] = p; });
+
+        if (devices.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary);">No devices registered yet. Add a device first.</p>';
+          return;
+        }
+
+        listEl.innerHTML = devices.map(device => {
+          const pref = prefsMap[device.device_id];
+          const isEnabled = pref ? pref.telegram_fault_enabled : true;
+
+          return `
+            <div class="device-pref-item">
+              <div class="device-pref-info">
+                <h4>${device.name || device.device_id}</h4>
+                <p>${device.device_id}</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox"
+                       ${isEnabled ? 'checked' : ''}
+                       onchange="toggleDeviceNotification('${device.device_id}', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error('Error loading notification preferences:', e);
+        listEl.innerHTML = '<p style="color: var(--danger);">Error loading preferences</p>';
+      }
+    }
+
+    async function toggleDeviceNotification(deviceId, enabled) {
+      try {
+        await supabaseClient
+          .from('notification_preferences')
+          .upsert({
+            user_id: currentUser.id,
+            device_id: deviceId,
+            telegram_fault_enabled: enabled
+          }, { onConflict: 'user_id,device_id' });
+      } catch (e) {
+        console.error('Error updating notification preference:', e);
+        alert('Failed to update notification settings');
+      }
+    }
+
+    async function loadNotificationHistory() {
+      const historyEl = document.getElementById('notification-history');
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('notifications')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          historyEl.innerHTML = '<p style="color: var(--text-secondary);">No alerts sent yet.</p>';
+          return;
+        }
+
+        historyEl.innerHTML = data.map(n => `
+          <div class="notification-item">
+            <div class="notif-content">
+              <div class="notif-device">${n.device_name || n.device_id} - FAULT</div>
+              <div class="notif-time">${new Date(n.created_at).toLocaleString()}</div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Error loading notification history:', e);
+      }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check if Supabase client was created successfully
+      if (supabaseClient) {
+        console.log('Supabase ready, checking auth...');
+        checkAuth();
+      } else {
+        console.error('Supabase client not available');
+      }
+
+      // Periodic stats update
+      setInterval(function() {
+        if (document.getElementById('page-dashboard').classList.contains('active')) {
+          renderDevicesList();
+          updateStats();
+        }
+        if (document.getElementById('page-device').classList.contains('active') && currentDeviceId) {
+          updateDeviceUI(deviceLastData[currentDeviceId] || {});
+        }
+      }, 5000);
+    });
+
+    // ============================================
+    // FIRMWARE MANAGEMENT
+    // ============================================
+
+    // Handle firmware upload
+    async function handleFirmwareUpload(e) {
+      e.preventDefault();
+
+      const firmwareError = document.getElementById('firmware-error');
+      const firmwareSuccess = document.getElementById('firmware-success');
+      const uploadProgress = document.getElementById('upload-progress');
+      const uploadProgressBar = document.getElementById('upload-progress-bar');
+      const uploadProgressText = document.getElementById('upload-progress-text');
+      const btnUpload = document.getElementById('btn-upload-firmware');
+
+      firmwareError.style.display = 'none';
+      firmwareSuccess.style.display = 'none';
+
+      try {
+        const hardwareType = document.getElementById('firmware-hardware-type').value;
+        const version = document.getElementById('firmware-version').value;
+        const fileInput = document.getElementById('firmware-file');
+        const changelog = document.getElementById('firmware-changelog').value;
+        const isCritical = document.getElementById('firmware-critical').checked;
+
+        const file = fileInput.files[0];
+        if (!file) {
+          throw new Error('Please select a firmware file');
+        }
+
+        if (!file.name.endsWith('.bin')) {
+          throw new Error('File must be a .bin firmware file');
+        }
+
+        btnUpload.disabled = true;
+        uploadProgress.style.display = 'block';
+
+        // Get hardware type ID
+        const { data: hardwareTypes, error: hwError } = await supabaseClient
+          .from('hardware_types')
+          .select('id')
+          .eq('type_code', hardwareType)
+          .single();
+
+        if (hwError) throw hwError;
+
+        // Upload file to Supabase Storage
+        const fileName = hardwareType.toLowerCase().replace('_', '/') + '/v' + version + '.bin';
+        uploadProgressText.textContent = 'Uploading firmware file...';
+
+        const { data: uploadData, error: uploadError } = await supabaseClient.storage
+          .from('firmware-releases')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        uploadProgressBar.style.width = '50%';
+        uploadProgressText.textContent = 'Creating firmware release record...';
+
+        // Get public URL
+        const { data: urlData } = supabaseClient.storage
+          .from('firmware-releases')
+          .getPublicUrl(fileName);
+
+        // Insert firmware release record
+        const { data: releaseData, error: releaseError } = await supabaseClient
+          .from('firmware_releases')
+          .insert({
+            hardware_type_id: hardwareTypes.id,
+            version: version,
+            file_url: urlData.publicUrl,
+            file_size: file.size,
+            changelog: changelog || null,
+            is_critical: isCritical,
+            released_by: currentUser.email
+          })
+          .select()
+          .single();
+
+        if (releaseError) {
+          // If record creation fails, delete the uploaded file
+          await supabaseClient.storage.from('firmware-releases').remove([fileName]);
+          throw releaseError;
+        }
+
+        uploadProgressBar.style.width = '100%';
+        uploadProgressText.textContent = 'Upload complete!';
+
+        firmwareSuccess.textContent = 'Firmware v' + version + ' uploaded successfully!';
+        firmwareSuccess.style.display = 'block';
+
+        // Reset form
+        document.getElementById('firmware-version').value = '';
+        document.getElementById('firmware-changelog').value = '';
+        document.getElementById('firmware-critical').checked = false;
+        fileInput.value = '';
+
+        // Reload firmware releases
+        setTimeout(() => {
+          uploadProgress.style.display = 'none';
+          uploadProgressBar.style.width = '0%';
+          btnUpload.disabled = false;
+          loadFirmwareReleases();
+        }, 2000);
+
+      } catch (error) {
+        console.error('Firmware upload error:', error);
+        firmwareError.textContent = error.message;
+        firmwareError.style.display = 'block';
+        uploadProgress.style.display = 'none';
+        uploadProgressBar.style.width = '0%';
+        btnUpload.disabled = false;
+      }
+    }
+
+    // Load firmware releases
+    async function loadFirmwareReleases() {
+      const listEl = document.getElementById('firmware-releases-list');
+
+      try {
+        const { data: releases, error } = await supabaseClient
+          .from('firmware_releases')
+          .select(`
+            *,
+            hardware_types (type_code, name)
+          `)
+          .eq('is_active', true)
+          .order('released_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (releases.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary);">No firmware releases yet.</p>';
+          return;
+        }
+
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="border-bottom: 1px solid var(--border-color);">';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Hardware</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Version</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Released</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Size</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Critical</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Actions</th>';
+        html += '</tr></thead><tbody>';
+
+        releases.forEach(release => {
+          const releasedDate = new Date(release.released_at).toLocaleDateString();
+          const fileSize = (release.file_size / 1024 / 1024).toFixed(2) + ' MB';
+          const isCritical = release.is_critical ? '🔴 Yes' : '⚪ No';
+
+          html += '<tr style="border-bottom: 1px solid var(--border-light);">';
+          html += '<td style="padding: 12px;">' + release.hardware_types.name + '</td>';
+          html += '<td style="padding: 12px; font-family: monospace;">' + release.version + '</td>';
+          html += '<td style="padding: 12px;">' + releasedDate + '</td>';
+          html += '<td style="padding: 12px;">' + fileSize + '</td>';
+          html += '<td style="padding: 12px;">' + isCritical + '</td>';
+          html += '<td style="padding: 12px;">';
+          html += '<button class="btn btn-secondary btn-small" onclick="showPushUpdateModal(\'' + release.id + '\', \'' + release.hardware_types.type_code + '\', \'' + release.version + '\')">Push Update</button>';
+          html += '</td></tr>';
+        });
+
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+
+      } catch (error) {
+        console.error('Error loading firmware releases:', error);
+        listEl.innerHTML = '<p style="color: var(--error);">Error loading firmware releases</p>';
+      }
+    }
+
+    // Load device firmware status
+    async function loadDeviceFirmwareStatus() {
+      const listEl = document.getElementById('device-firmware-list');
+
+      try {
+        const { data: devices, error } = await supabaseClient
+          .from('devices')
+          .select(`
+            *,
+            hardware_types (type_code, name)
+          `)
+          .order('last_seen', { ascending: false });
+
+        if (error) throw error;
+
+        if (devices.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary);">No devices registered yet.</p>';
+          return;
+        }
+
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr style="border-bottom: 1px solid var(--border-color);">';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Device</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Hardware</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Current Version</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Status</th>';
+        html += '<th style="padding: 12px; text-align: left; font-weight: 600;">Last Seen</th>';
+        html += '</tr></thead><tbody>';
+
+        devices.forEach(device => {
+          const statusColor = device.status === 'online' ? 'var(--success)' : 'var(--text-secondary)';
+          const lastSeen = device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never';
+
+          html += '<tr style="border-bottom: 1px solid var(--border-light);">';
+          html += '<td style="padding: 12px;"><strong>' + device.device_id + '</strong><br><small style="color: var(--text-secondary);">' + (device.name || 'Unnamed') + '</small></td>';
+          html += '<td style="padding: 12px;">' + (device.hardware_types ? device.hardware_types.name : 'Unknown') + '</td>';
+          html += '<td style="padding: 12px; font-family: monospace;">' + (device.firmware_version || 'Unknown') + '</td>';
+          html += '<td style="padding: 12px; color: ' + statusColor + ';">' + device.status + '</td>';
+          html += '<td style="padding: 12px;">' + lastSeen + '</td>';
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+
+      } catch (error) {
+        console.error('Error loading device firmware status:', error);
+        listEl.innerHTML = '<p style="color: var(--error);">Error loading devices</p>';
+      }
+    }
+
+    // Variables for push firmware modal
+    var pendingPushReleaseId = null;
+    var pendingPushHardwareType = null;
+    var pendingPushVersion = null;
+    var pendingPushFileUrl = null;
+
+    // Show push update modal with device selection
+    async function showPushUpdateModal(releaseId, hardwareType, version) {
+      pendingPushReleaseId = releaseId;
+      pendingPushHardwareType = hardwareType;
+      pendingPushVersion = version;
+
+      document.getElementById('push-firmware-version').textContent = version;
+      document.getElementById('push-firmware-error').style.display = 'none';
+      document.getElementById('select-all-devices').checked = false;
+
+      const listEl = document.getElementById('device-selection-list');
+      listEl.innerHTML = '<p style="color: var(--text-secondary);">Loading devices...</p>';
+
+      showModal('push-firmware-modal');
+
+      try {
+        // Get firmware URL
+        const { data: release, error: releaseError } = await supabaseClient
+          .from('firmware_releases')
+          .select('file_url')
+          .eq('id', releaseId)
+          .single();
+
+        if (releaseError) throw releaseError;
+        pendingPushFileUrl = release.file_url;
+
+        // Get all devices of this hardware type
+        const { data: devices, error: devicesError } = await supabaseClient
+          .from('devices')
+          .select('device_id, name, status, firmware_version, hardware_types!inner(type_code)')
+          .eq('hardware_types.type_code', hardwareType)
+          .order('name');
+
+        if (devicesError) throw devicesError;
+
+        if (devices.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary);">No devices found for this hardware type.</p>';
+          return;
+        }
+
+        let html = '';
+        devices.forEach(device => {
+          const isOnline = device.status === 'online';
+          const statusDot = isOnline ? '🟢' : '🔴';
+          const currentVersion = device.firmware_version || 'Unknown';
+
+          html += '<label style="display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border-light); cursor: ' + (isOnline ? 'pointer' : 'not-allowed') + '; opacity: ' + (isOnline ? '1' : '0.5') + ';">';
+          html += '<input type="checkbox" class="device-checkbox" value="' + device.device_id + '" ' + (isOnline ? '' : 'disabled') + ' onchange="updateSelectedCount()" style="width: auto;">';
+          html += '<div style="flex: 1;">';
+          html += '<strong>' + device.device_id + '</strong>';
+          html += '<br><small style="color: var(--text-secondary);">' + (device.name || 'Unnamed') + ' • v' + currentVersion + '</small>';
+          html += '</div>';
+          html += '<span>' + statusDot + '</span>';
+          html += '</label>';
+        });
+
+        listEl.innerHTML = html;
+        updateSelectedCount();
+
+      } catch (error) {
+        console.error('Error loading devices:', error);
+        listEl.innerHTML = '<p style="color: var(--error);">Error loading devices</p>';
+      }
+    }
+
+    // Toggle select all devices
+    function toggleSelectAllDevices() {
+      const selectAll = document.getElementById('select-all-devices').checked;
+      const checkboxes = document.querySelectorAll('.device-checkbox:not(:disabled)');
+      checkboxes.forEach(cb => cb.checked = selectAll);
+      updateSelectedCount();
+    }
+
+    // Update selected device count
+    function updateSelectedCount() {
+      const checkboxes = document.querySelectorAll('.device-checkbox:checked');
+      const count = checkboxes.length;
+      document.getElementById('selected-device-count').textContent = count + ' device' + (count !== 1 ? 's' : '') + ' selected';
+      document.getElementById('btn-confirm-push').disabled = count === 0;
+    }
+
+    // Confirm and push firmware to selected devices
+    async function confirmPushFirmware() {
+      const checkboxes = document.querySelectorAll('.device-checkbox:checked');
+      const selectedDevices = Array.from(checkboxes).map(cb => cb.value);
+
+      if (selectedDevices.length === 0) {
+        alert('Please select at least one device');
+        return;
+      }
+
+      const confirmMsg = 'Push firmware v' + pendingPushVersion + ' to ' + selectedDevices.length + ' device(s)?\n\nDevices: ' + selectedDevices.join(', ');
+      if (!confirm(confirmMsg)) return;
+
+      hideModal('push-firmware-modal');
+      await pushFirmwareToDevices(selectedDevices, pendingPushReleaseId, pendingPushVersion, pendingPushFileUrl);
+    }
+
+    // Push firmware update to specific devices via MQTT
+    async function pushFirmwareToDevices(deviceIds, releaseId, version, fileUrl) {
+      const firmwareError = document.getElementById('firmware-error');
+      const firmwareSuccess = document.getElementById('firmware-success');
+
+      firmwareError.style.display = 'none';
+      firmwareSuccess.style.display = 'none';
+
+      try {
+        // Connect to MQTT broker
+        const client = mqtt.connect(MQTT_BROKER_URL, {
+          username: MQTT_USERNAME,
+          password: MQTT_PASSWORD
+        });
+
+        client.on('connect', async function() {
+          console.log('MQTT connected for firmware update');
+
+          let successCount = 0;
+
+          for (const deviceId of deviceIds) {
+            const topic = 'fieldlink/' + deviceId + '/command';
+            const command = JSON.stringify({
+              command: 'UPDATE_FIRMWARE',
+              url: fileUrl
+            });
+
+            // Publish update command
+            client.publish(topic, command, { qos: 1 }, function(err) {
+              if (!err) {
+                console.log('Update command sent to ' + deviceId);
+                successCount++;
+
+                // Record update in database
+                supabaseClient.from('firmware_updates').insert({
+                  device_id: deviceId,
+                  firmware_release_id: releaseId,
+                  from_version: null,
+                  to_version: version,
+                  status: 'pending',
+                  started_at: new Date().toISOString()
+                });
+              }
+            });
+          }
+
+          setTimeout(() => {
+            client.end();
+            firmwareSuccess.textContent = 'Update command sent to ' + successCount + ' device(s): ' + deviceIds.join(', ');
+            firmwareSuccess.style.display = 'block';
+            loadDeviceFirmwareStatus();
+          }, 1000);
+        });
+
+        client.on('error', function(err) {
+          console.error('MQTT error:', err);
+          firmwareError.textContent = 'MQTT connection error: ' + err.message;
+          firmwareError.style.display = 'block';
+        });
+
+      } catch (error) {
+        console.error('Push update error:', error);
+        firmwareError.textContent = error.message;
+        firmwareError.style.display = 'block';
+      }
+    }
+
+    // ============================================
+    // USER MANAGEMENT (Admin Only)
+    // ============================================
+    async function loadAllUsers() {
+      const listEl = document.getElementById('users-list');
+      const errorEl = document.getElementById('users-error');
+      const successEl = document.getElementById('users-success');
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+      listEl.innerHTML = '<p style="color: var(--text-secondary);">Loading users...</p>';
+
+      try {
+        const { data: users, error } = await supabaseClient
+          .from('user_profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Update stats
+        const totalUsers = users.length;
+        const adminCount = users.filter(u => u.is_admin).length;
+        const activeCount = users.filter(u => u.is_active !== false).length;
+
+        document.getElementById('stat-total-users').textContent = totalUsers;
+        document.getElementById('stat-admins').textContent = adminCount;
+        document.getElementById('stat-active-users').textContent = activeCount;
+
+        if (users.length === 0) {
+          listEl.innerHTML = '<p style="color: var(--text-secondary);">No users found.</p>';
+          return;
+        }
+
+        // Build table
+        let html = '<table class="user-table"><thead><tr>';
+        html += '<th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th>';
+        html += '</tr></thead><tbody>';
+
+        users.forEach(user => {
+          const isCurrentUser = user.id === currentUser.id;
+          const isActive = user.is_active !== false;
+          const joinDate = new Date(user.created_at).toLocaleDateString();
+
+          html += '<tr>';
+          html += '<td>' + (user.full_name || '<em>Not set</em>') + '</td>';
+          html += '<td>' + user.email + '</td>';
+          html += '<td><span class="user-role-badge ' + (user.is_admin ? 'admin' : 'user') + '">' + (user.is_admin ? 'Admin' : 'User') + '</span></td>';
+          html += '<td><span class="' + (isActive ? 'user-status-active' : 'user-status-inactive') + '">' + (isActive ? 'Active' : 'Inactive') + '</span></td>';
+          html += '<td>' + joinDate + '</td>';
+          html += '<td class="user-actions">';
+
+          if (isCurrentUser) {
+            html += '<span style="color: var(--text-tertiary); font-size: 12px;">Current user</span>';
+          } else {
+            if (user.is_admin) {
+              html += '<button class="btn btn-small btn-secondary" onclick="toggleUserAdmin(\'' + user.id + '\', false)">Demote</button>';
+            } else {
+              html += '<button class="btn btn-small btn-primary" onclick="toggleUserAdmin(\'' + user.id + '\', true)">Promote</button>';
+            }
+            if (isActive) {
+              html += '<button class="btn btn-small btn-danger" onclick="toggleUserActive(\'' + user.id + '\', false)">Deactivate</button>';
+            } else {
+              html += '<button class="btn btn-small btn-success" onclick="toggleUserActive(\'' + user.id + '\', true)">Activate</button>';
+            }
+            html += '<button class="btn btn-small btn-secondary" onclick="showResetPasswordModal(\'' + user.id + '\', \'' + user.email + '\')">Reset Password</button>';
+          }
+
+          html += '</td>';
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+
+      } catch (error) {
+        console.error('Error loading users:', error);
+        errorEl.textContent = 'Error loading users: ' + error.message;
+        errorEl.style.display = 'block';
+        listEl.innerHTML = '';
+      }
+    }
+
+    async function toggleUserAdmin(userId, makeAdmin) {
+      const errorEl = document.getElementById('users-error');
+      const successEl = document.getElementById('users-success');
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      try {
+        const { error } = await supabaseClient
+          .from('user_profiles')
+          .update({ is_admin: makeAdmin, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+
+        if (error) throw error;
+
+        successEl.textContent = makeAdmin ? 'User promoted to admin.' : 'User demoted from admin.';
+        successEl.style.display = 'block';
+        loadAllUsers();
+
+      } catch (error) {
+        console.error('Error updating user:', error);
+        errorEl.textContent = 'Error updating user: ' + error.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    async function toggleUserActive(userId, makeActive) {
+      const errorEl = document.getElementById('users-error');
+      const successEl = document.getElementById('users-success');
+
+      errorEl.style.display = 'none';
+      successEl.style.display = 'none';
+
+      try {
+        const { error } = await supabaseClient
+          .from('user_profiles')
+          .update({ is_active: makeActive, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+
+        if (error) throw error;
+
+        successEl.textContent = makeActive ? 'User activated.' : 'User deactivated.';
+        successEl.style.display = 'block';
+        loadAllUsers();
+
+      } catch (error) {
+        console.error('Error updating user:', error);
+        errorEl.textContent = 'Error updating user: ' + error.message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function showResetPasswordModal(userId, userEmail) {
+      document.getElementById('reset-password-user-id').value = userId;
+      document.getElementById('reset-password-email').textContent = userEmail;
+      document.getElementById('reset-password-new').value = '';
+      document.getElementById('reset-password-confirm').value = '';
+      document.getElementById('reset-password-error').style.display = 'none';
+      showModal('reset-password-modal');
+    }
+
+    async function handleAdminResetPassword(e) {
+      e.preventDefault();
+
+      const userId = document.getElementById('reset-password-user-id').value;
+      const newPassword = document.getElementById('reset-password-new').value;
+      const confirmPassword = document.getElementById('reset-password-confirm').value;
+      const errorEl = document.getElementById('reset-password-error');
+      const btn = document.getElementById('btn-reset-password');
+
+      errorEl.style.display = 'none';
+
+      if (newPassword !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        errorEl.textContent = 'Password must be at least 6 characters.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Resetting...';
+
+      try {
+        // Get current session token
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+          throw new Error('Not authenticated');
+        }
+
+        const response = await fetch('https://fast-fox-18.voltageza.deno.net/admin/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            new_password: newPassword,
+            admin_token: session.access_token
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to reset password');
+        }
+
+        hideModal('reset-password-modal');
+        document.getElementById('users-success').textContent = 'Password reset successfully.';
+        document.getElementById('users-success').style.display = 'block';
+
+      } catch (error) {
+        console.error('Password reset error:', error);
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Reset Password';
+      }
+    }
+
+    function showCreateUserModal() {
+      document.getElementById('create-user-name').value = '';
+      document.getElementById('create-user-email').value = '';
+      document.getElementById('create-user-password').value = '';
+      document.getElementById('create-user-password-confirm').value = '';
+      document.getElementById('create-user-admin').checked = false;
+      document.getElementById('create-user-error').style.display = 'none';
+      showModal('create-user-modal');
+    }
+
+    async function handleAdminCreateUser(e) {
+      e.preventDefault();
+
+      const fullName = document.getElementById('create-user-name').value;
+      const email = document.getElementById('create-user-email').value;
+      const password = document.getElementById('create-user-password').value;
+      const confirmPassword = document.getElementById('create-user-password-confirm').value;
+      const makeAdmin = document.getElementById('create-user-admin').checked;
+      const errorEl = document.getElementById('create-user-error');
+      const btn = document.getElementById('btn-create-user');
+
+      errorEl.style.display = 'none';
+
+      if (password !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      if (password.length < 6) {
+        errorEl.textContent = 'Password must be at least 6 characters.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        // Get current session token
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) {
+          throw new Error('Not authenticated');
+        }
+
+        const response = await fetch('https://fast-fox-18.voltageza.deno.net/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+            full_name: fullName,
+            is_admin: makeAdmin,
+            admin_token: session.access_token
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to create user');
+        }
+
+        hideModal('create-user-modal');
+        document.getElementById('users-success').textContent = 'User created successfully.';
+        document.getElementById('users-success').style.display = 'block';
+        loadAllUsers();
+
+      } catch (error) {
+        console.error('Create user error:', error);
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create User';
+      }
+    }
+
+    // Handle firmware and users page navigation
+    const originalShowPage = showPage;
+    showPage = function(pageId) {
+      // Admin-only page access check
+      if (pageId === 'users') {
+        if (!isAdmin) {
+          alert('Access denied. Admin privileges required.');
+          return;
+        }
+        document.getElementById('users-user-email').textContent = currentUser ? currentUser.email : '';
+        originalShowPage(pageId);
+        loadAllUsers();
+        return;
+      }
+
+      originalShowPage(pageId);
+
+      if (pageId === 'firmware') {
+        document.getElementById('firmware-user-email').textContent = currentUser ? currentUser.email : '';
+        loadFirmwareReleases();
+        loadDeviceFirmwareStatus();
+      }
+    };
+
+    // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
-        .then(function(reg) { console.log('SW registered:', reg.scope); })
-        .catch(function(err) { console.log('SW registration failed:', err); });
+        .then(function(reg) { console.log('SW registered'); })
+        .catch(function(err) { console.log('SW error:', err); });
     }
   </script>
 </body>
