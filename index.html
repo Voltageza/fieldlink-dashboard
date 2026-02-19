@@ -1493,6 +1493,133 @@
         padding: 8px 6px;
       }
     }
+
+    /* ─────────────── EVE 3-PUMP LAYOUT ─────────────── */
+    .pump-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .pump-card {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      border: 2px solid transparent;
+      transition: border-color 0.3s;
+    }
+
+    .pump-card.running {
+      border-color: var(--success);
+    }
+
+    .pump-card.fault {
+      border-color: var(--danger);
+      box-shadow: 0 0 20px rgba(255, 59, 48, 0.15);
+    }
+
+    .pump-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .pump-state-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+    }
+
+    .pump-state-badge.running {
+      background: rgba(52, 199, 89, 0.15);
+      color: var(--success);
+    }
+
+    .pump-state-badge.stopped {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+
+    .pump-state-badge.fault {
+      background: rgba(255, 59, 48, 0.15);
+      color: var(--danger);
+    }
+
+    .pump-reading-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 14px;
+    }
+
+    .pump-reading-row:last-child {
+      border-bottom: none;
+    }
+
+    .pump-reading-row .label {
+      color: var(--text-secondary);
+    }
+
+    .pump-reading-row .value {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .pump-card .control-buttons {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .pump-card .btn {
+      flex: 1;
+      padding: 8px 4px;
+      font-size: 12px;
+    }
+
+    .aggregate-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .aggregate-controls .btn {
+      flex: 1;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .eve-system-info {
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+
+    .eve-system-info .info-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .pump-grid {
+        grid-template-columns: 1fr;
+      }
+      .aggregate-controls {
+        flex-direction: column;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1735,7 +1862,7 @@
         </div>
       </div>
 
-      <div class="state-card">
+      <div class="state-card" id="single-pump-state-card">
         <div class="state-indicator" id="device-state-indicator">
           <div class="state-icon stopped" id="device-state-icon"></div>
           <div class="state-text stopped" id="device-state-text">---</div>
@@ -1743,60 +1870,153 @@
         <p style="margin-top: 16px; font-size: 13px; color: var(--text-secondary);" id="device-last-seen">Waiting for data...</p>
       </div>
 
-      <div class="readings-grid">
-        <div class="reading-card">
-          <div class="reading-label">Phase A Current</div>
-          <div class="reading-value" id="device-current-a">--</div>
-          <div class="reading-unit">Amps</div>
+      <!-- Single Pump UI (Adam) -->
+      <div id="single-pump-ui">
+        <div class="readings-grid">
+          <div class="reading-card">
+            <div class="reading-label">Phase A Current</div>
+            <div class="reading-value" id="device-current-a">--</div>
+            <div class="reading-unit">Amps</div>
+          </div>
+          <div class="reading-card">
+            <div class="reading-label">Phase B Current</div>
+            <div class="reading-value" id="device-current-b">--</div>
+            <div class="reading-unit">Amps</div>
+          </div>
+          <div class="reading-card">
+            <div class="reading-label">Phase C Current</div>
+            <div class="reading-value" id="device-current-c">--</div>
+            <div class="reading-unit">Amps</div>
+          </div>
+          <div class="reading-card">
+            <div class="reading-label">Uptime</div>
+            <div class="reading-value" id="device-uptime" style="font-size: 28px;">--:--:--</div>
+            <div class="reading-unit">HH:MM:SS</div>
+          </div>
         </div>
-        <div class="reading-card">
-          <div class="reading-label">Phase B Current</div>
-          <div class="reading-value" id="device-current-b">--</div>
-          <div class="reading-unit">Amps</div>
-        </div>
-        <div class="reading-card">
-          <div class="reading-label">Phase C Current</div>
-          <div class="reading-value" id="device-current-c">--</div>
-          <div class="reading-unit">Amps</div>
-        </div>
-        <div class="reading-card">
-          <div class="reading-label">Uptime</div>
-          <div class="reading-value" id="device-uptime" style="font-size: 28px;">--:--:--</div>
-          <div class="reading-unit">HH:MM:SS</div>
+
+        <div class="controls-grid">
+          <div class="control-card">
+            <h3>Controls</h3>
+            <div class="control-buttons">
+              <button class="btn btn-success" id="device-btn-start" onclick="sendDeviceCommand('START')">Start Pump</button>
+              <button class="btn btn-danger" id="device-btn-stop" onclick="sendDeviceCommand('STOP')">Stop Pump</button>
+              <button class="btn btn-secondary" id="device-btn-reset" onclick="sendDeviceCommand('RESET')">Reset Fault</button>
+            </div>
+          </div>
+          <div class="control-card">
+            <h3>System Info</h3>
+            <div class="info-list">
+              <div class="info-item">
+                <span class="label">Sensor</span>
+                <span class="status-badge offline" id="device-sensor-status">OFFLINE</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Command</span>
+                <span class="status-badge inactive" id="device-cmd-status">INACTIVE</span>
+              </div>
+              <div class="info-item">
+                <span class="label">Mode</span>
+                <span class="status-badge inactive" id="device-mode-status">---</span>
+              </div>
+            </div>
+          </div>
+          <div class="control-card">
+            <h3>Device Actions</h3>
+            <div class="control-buttons">
+              <button class="btn btn-secondary" onclick="editDeviceName()">Rename Device</button>
+              <button class="btn btn-danger" onclick="confirmRemoveDevice()">Remove Device</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="controls-grid">
-        <div class="control-card">
-          <h3>Controls</h3>
-          <div class="control-buttons">
-            <button class="btn btn-success" id="device-btn-start" onclick="sendDeviceCommand('START')">Start Pump</button>
-            <button class="btn btn-danger" id="device-btn-stop" onclick="sendDeviceCommand('STOP')">Stop Pump</button>
-            <button class="btn btn-secondary" id="device-btn-reset" onclick="sendDeviceCommand('RESET')">Reset Fault</button>
+      <!-- Multi Pump UI (Eve) -->
+      <div id="multi-pump-ui" style="display: none;">
+        <div class="aggregate-controls">
+          <button class="btn btn-success" onclick="sendEveAllCommand('START_ALL')">Start All</button>
+          <button class="btn btn-danger" onclick="sendEveAllCommand('STOP_ALL')">Stop All</button>
+          <button class="btn btn-secondary" onclick="sendEveAllCommand('RESET_ALL')">Reset All</button>
+        </div>
+
+        <div class="pump-grid">
+          <div class="pump-card" id="eve-pump1-card">
+            <div class="pump-card-title">
+              <span>Pump 1 (L1)</span>
+              <span class="pump-state-badge stopped" id="eve-pump1-state">---</span>
+            </div>
+            <div class="pump-reading-row"><span class="label">Voltage</span><span class="value" id="eve-pump1-voltage">-- V</span></div>
+            <div class="pump-reading-row"><span class="label">Current</span><span class="value" id="eve-pump1-current">-- A</span></div>
+            <div class="pump-reading-row"><span class="label">Contactor</span><span class="value" id="eve-pump1-contactor">--</span></div>
+            <div class="pump-reading-row"><span class="label">Feedback</span><span class="value" id="eve-pump1-feedback">--</span></div>
+            <div class="pump-reading-row"><span class="label">Fault</span><span class="value" id="eve-pump1-fault">--</span></div>
+            <div class="control-buttons">
+              <button class="btn btn-success" onclick="sendEveCommand('START', 1)">Start</button>
+              <button class="btn btn-danger" onclick="sendEveCommand('STOP', 1)">Stop</button>
+              <button class="btn btn-secondary" onclick="sendEveCommand('RESET', 1)">Reset</button>
+            </div>
+          </div>
+
+          <div class="pump-card" id="eve-pump2-card">
+            <div class="pump-card-title">
+              <span>Pump 2 (L2)</span>
+              <span class="pump-state-badge stopped" id="eve-pump2-state">---</span>
+            </div>
+            <div class="pump-reading-row"><span class="label">Voltage</span><span class="value" id="eve-pump2-voltage">-- V</span></div>
+            <div class="pump-reading-row"><span class="label">Current</span><span class="value" id="eve-pump2-current">-- A</span></div>
+            <div class="pump-reading-row"><span class="label">Contactor</span><span class="value" id="eve-pump2-contactor">--</span></div>
+            <div class="pump-reading-row"><span class="label">Feedback</span><span class="value" id="eve-pump2-feedback">--</span></div>
+            <div class="pump-reading-row"><span class="label">Fault</span><span class="value" id="eve-pump2-fault">--</span></div>
+            <div class="control-buttons">
+              <button class="btn btn-success" onclick="sendEveCommand('START', 2)">Start</button>
+              <button class="btn btn-danger" onclick="sendEveCommand('STOP', 2)">Stop</button>
+              <button class="btn btn-secondary" onclick="sendEveCommand('RESET', 2)">Reset</button>
+            </div>
+          </div>
+
+          <div class="pump-card" id="eve-pump3-card">
+            <div class="pump-card-title">
+              <span>Pump 3 (L3)</span>
+              <span class="pump-state-badge stopped" id="eve-pump3-state">---</span>
+            </div>
+            <div class="pump-reading-row"><span class="label">Voltage</span><span class="value" id="eve-pump3-voltage">-- V</span></div>
+            <div class="pump-reading-row"><span class="label">Current</span><span class="value" id="eve-pump3-current">-- A</span></div>
+            <div class="pump-reading-row"><span class="label">Contactor</span><span class="value" id="eve-pump3-contactor">--</span></div>
+            <div class="pump-reading-row"><span class="label">Feedback</span><span class="value" id="eve-pump3-feedback">--</span></div>
+            <div class="pump-reading-row"><span class="label">Fault</span><span class="value" id="eve-pump3-fault">--</span></div>
+            <div class="control-buttons">
+              <button class="btn btn-success" onclick="sendEveCommand('START', 3)">Start</button>
+              <button class="btn btn-danger" onclick="sendEveCommand('STOP', 3)">Stop</button>
+              <button class="btn btn-secondary" onclick="sendEveCommand('RESET', 3)">Reset</button>
+            </div>
           </div>
         </div>
-        <div class="control-card">
+
+        <div class="eve-system-info">
           <h3>System Info</h3>
           <div class="info-list">
             <div class="info-item">
               <span class="label">Sensor</span>
-              <span class="status-badge offline" id="device-sensor-status">OFFLINE</span>
+              <span class="status-badge offline" id="eve-sensor-status">OFFLINE</span>
             </div>
             <div class="info-item">
-              <span class="label">Command</span>
-              <span class="status-badge inactive" id="device-cmd-status">INACTIVE</span>
+              <span class="label">Network</span>
+              <span class="status-badge inactive" id="eve-network-status">--</span>
             </div>
             <div class="info-item">
-              <span class="label">Mode</span>
-              <span class="status-badge inactive" id="device-mode-status">---</span>
+              <span class="label">Uptime</span>
+              <span class="status-badge inactive" id="eve-uptime">--:--:--</span>
             </div>
           </div>
         </div>
-        <div class="control-card">
-          <h3>Device Actions</h3>
-          <div class="control-buttons">
-            <button class="btn btn-secondary" onclick="editDeviceName()">Rename Device</button>
-            <button class="btn btn-danger" onclick="confirmRemoveDevice()">Remove Device</button>
+
+        <div class="controls-grid">
+          <div class="control-card">
+            <h3>Device Actions</h3>
+            <div class="control-buttons">
+              <button class="btn btn-secondary" onclick="editDeviceName()">Rename Device</button>
+              <button class="btn btn-danger" onclick="confirmRemoveDevice()">Remove Device</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2635,21 +2855,40 @@
         const isDecommissioned = device.decommissioned === true;
         const isOnline = !isDecommissioned && data.lastSeen && (Date.now() - data.lastSeen < 15000);
 
+        const isEveDevice = data.hardware_type === 'EVE_ESP32S3';
+
         let state, stateClass;
         if (isDecommissioned) {
           state = 'DECOMMISSIONED';
           stateClass = 'decommissioned';
         } else if (isOnline) {
-          state = data.state || 'STOPPED';
+          if (isEveDevice) {
+            // Eve: derive aggregate state from per-pump states
+            var anyFault = (data.s1 === 'FAULT' || data.s2 === 'FAULT' || data.s3 === 'FAULT');
+            var anyRunning = (data.s1 === 'RUNNING' || data.s2 === 'RUNNING' || data.s3 === 'RUNNING');
+            state = anyFault ? 'FAULT' : (anyRunning ? 'RUNNING' : 'STOPPED');
+          } else {
+            state = data.state || 'STOPPED';
+          }
           stateClass = state.toLowerCase();
         } else {
           state = 'OFFLINE';
           stateClass = 'offline';
         }
 
-        const currentAvg = isOnline && data.Ia !== undefined
-          ? ((data.Ia + data.Ib + data.Ic) / 3).toFixed(1)
-          : '--';
+        let currentAvg;
+        if (isEveDevice && isOnline) {
+          // Eve: show average across 3 pump currents
+          var sum = 0, cnt = 0;
+          if (data.I1 !== undefined) { sum += data.I1; cnt++; }
+          if (data.I2 !== undefined) { sum += data.I2; cnt++; }
+          if (data.I3 !== undefined) { sum += data.I3; cnt++; }
+          currentAvg = cnt > 0 ? (sum / cnt).toFixed(1) : '--';
+        } else {
+          currentAvg = isOnline && data.Ia !== undefined
+            ? ((data.Ia + data.Ib + data.Ic) / 3).toFixed(1)
+            : '--';
+        }
 
         // Show owner email in admin view
         const ownerInfo = (isAdmin && showAllDevices && device.user_profiles)
@@ -2690,8 +2929,15 @@
         const isOnline = data.lastSeen && (Date.now() - data.lastSeen < 15000);
         if (isOnline) {
           online++;
-          if (data.state === 'RUNNING') running++;
-          if (data.state === 'FAULT') faults++;
+          if (data.hardware_type === 'EVE_ESP32S3') {
+            var eveAnyFault = (data.s1 === 'FAULT' || data.s2 === 'FAULT' || data.s3 === 'FAULT');
+            var eveAnyRunning = (data.s1 === 'RUNNING' || data.s2 === 'RUNNING' || data.s3 === 'RUNNING');
+            if (eveAnyFault) faults++;
+            else if (eveAnyRunning) running++;
+          } else {
+            if (data.state === 'RUNNING') running++;
+            if (data.state === 'FAULT') faults++;
+          }
         }
       });
 
@@ -3022,8 +3268,17 @@
 
     function updateDeviceUI(data) {
       const isOnline = data.lastSeen && (Date.now() - data.lastSeen < 15000);
+      const isEve = data.hardware_type === 'EVE_ESP32S3';
 
-      // Connection status
+      // Toggle single/multi pump views
+      var singleUI = document.getElementById('single-pump-ui');
+      var multiUI = document.getElementById('multi-pump-ui');
+      var singleStateCard = document.getElementById('single-pump-state-card');
+      if (singleUI) singleUI.style.display = isEve ? 'none' : '';
+      if (multiUI) multiUI.style.display = isEve ? '' : 'none';
+      if (singleStateCard) singleStateCard.style.display = isEve ? 'none' : '';
+
+      // Connection status (shared)
       const dot = document.getElementById('device-connection-dot');
       const text = document.getElementById('device-connection-text');
       if (isOnline) {
@@ -3034,7 +3289,27 @@
         text.textContent = mqttClient && mqttClient.connected ? 'Waiting for data...' : 'Connecting...';
       }
 
-      // State
+      // Last seen (shared)
+      if (data.lastSeen) {
+        const secondsAgo = Math.floor((Date.now() - data.lastSeen) / 1000);
+        const lastSeenEl = document.getElementById('device-last-seen');
+        if (secondsAgo > 10) {
+          lastSeenEl.textContent = 'Last data: ' + secondsAgo + 's ago';
+          lastSeenEl.style.color = 'var(--warning)';
+        } else {
+          lastSeenEl.textContent = 'Live data';
+          lastSeenEl.style.color = 'var(--success)';
+        }
+      }
+
+      // Eve 3-pump devices
+      if (isEve) {
+        updateEveUI(data, isOnline);
+        updateDeviceSettings(data);
+        return;
+      }
+
+      // State (Adam single pump)
       const state = data.state || 'STOPPED';
       const stateClass = state.toLowerCase();
       document.getElementById('device-state-indicator').className = 'state-indicator ' + stateClass;
@@ -3075,19 +3350,6 @@
         modeEl.className = 'status-badge ' + (data.mode === 'REMOTE' ? 'active' : 'inactive');
       }
 
-      // Last seen
-      if (data.lastSeen) {
-        const secondsAgo = Math.floor((Date.now() - data.lastSeen) / 1000);
-        const lastSeenEl = document.getElementById('device-last-seen');
-        if (secondsAgo > 10) {
-          lastSeenEl.textContent = 'Last data: ' + secondsAgo + 's ago';
-          lastSeenEl.style.color = 'var(--warning)';
-        } else {
-          lastSeenEl.textContent = 'Live data';
-          lastSeenEl.style.color = 'var(--success)';
-        }
-      }
-
       // Button states
       document.getElementById('device-btn-start').disabled = state === 'FAULT' || !isOnline;
       document.getElementById('device-btn-reset').disabled = state !== 'FAULT' || !isOnline;
@@ -3102,6 +3364,94 @@
         mqttClient.publish(topic, cmd);
         console.log('Sent command:', topic, cmd);
       }
+    }
+
+    // ============================================
+    // EVE 3-PUMP FUNCTIONS
+    // ============================================
+    function updateEveUI(data, isOnline) {
+      for (var i = 1; i <= 3; i++) {
+        var state = data['s' + i] || 'STOPPED';
+        var stateClass = state.toLowerCase();
+        var voltage = data['V' + i];
+        var current = data['I' + i];
+        var contactor = data['c' + i];
+        var feedback = data['cf' + i];
+        var fault = data['f' + i];
+
+        // Card border
+        var card = document.getElementById('eve-pump' + i + '-card');
+        if (card) card.className = 'pump-card ' + (isOnline ? stateClass : '');
+
+        // State badge
+        var badge = document.getElementById('eve-pump' + i + '-state');
+        if (badge) {
+          badge.textContent = isOnline ? state : '---';
+          badge.className = 'pump-state-badge ' + (isOnline ? stateClass : 'stopped');
+        }
+
+        // Readings
+        var volEl = document.getElementById('eve-pump' + i + '-voltage');
+        if (volEl) volEl.textContent = voltage !== undefined ? voltage.toFixed(1) + ' V' : '-- V';
+
+        var curEl = document.getElementById('eve-pump' + i + '-current');
+        if (curEl) curEl.textContent = current !== undefined ? current.toFixed(1) + ' A' : '-- A';
+
+        var conEl = document.getElementById('eve-pump' + i + '-contactor');
+        if (conEl) conEl.textContent = contactor !== undefined ? (contactor ? 'ON' : 'OFF') : '--';
+
+        var fbEl = document.getElementById('eve-pump' + i + '-feedback');
+        if (fbEl) fbEl.textContent = feedback !== undefined ? (feedback ? 'OK' : 'NO') : '--';
+
+        var fltEl = document.getElementById('eve-pump' + i + '-fault');
+        if (fltEl) fltEl.textContent = fault ? fault : 'None';
+      }
+
+      // System info
+      var sensorEl = document.getElementById('eve-sensor-status');
+      if (sensorEl) {
+        sensorEl.textContent = data.sensor ? 'ONLINE' : 'OFFLINE';
+        sensorEl.className = 'status-badge ' + (data.sensor ? 'online' : 'offline');
+      }
+
+      var netEl = document.getElementById('eve-network-status');
+      if (netEl && data.network) {
+        netEl.textContent = data.network;
+        netEl.className = 'status-badge active';
+      }
+
+      var uptimeEl = document.getElementById('eve-uptime');
+      if (uptimeEl && data.uptime !== undefined) {
+        var h = Math.floor(data.uptime / 3600);
+        var m = Math.floor((data.uptime % 3600) / 60);
+        var s = data.uptime % 60;
+        uptimeEl.textContent = h.toString().padStart(2, '0') + ':' + m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0');
+        uptimeEl.className = 'status-badge active';
+      }
+    }
+
+    function sendEveCommand(cmd, pumpNum) {
+      if (mqttClient && mqttClient.connected && currentDeviceId) {
+        const topic = 'fieldlink/' + currentDeviceId + '/command';
+        const payload = JSON.stringify({ command: cmd, pump: pumpNum });
+        mqttClient.publish(topic, payload);
+        console.log('Sent Eve command:', topic, payload);
+      }
+    }
+
+    function sendEveAllCommand(cmd) {
+      if (mqttClient && mqttClient.connected && currentDeviceId) {
+        const topic = 'fieldlink/' + currentDeviceId + '/command';
+        const payload = JSON.stringify({ command: cmd });
+        mqttClient.publish(topic, payload);
+        console.log('Sent Eve all command:', topic, payload);
+      }
+    }
+
+    function isCurrentDeviceEve() {
+      if (!currentDeviceId) return false;
+      var data = deviceLastData[currentDeviceId];
+      return data && data.hardware_type === 'EVE_ESP32S3';
     }
 
     // ============================================
@@ -3300,7 +3650,8 @@
           }
 
           // Get previous state before updating
-          const previousState = deviceLastData[deviceId]?.state;
+          const previousData = deviceLastData[deviceId] || {};
+          const previousState = previousData.state;
           const currentState = data.state;
 
           data.lastSeen = Date.now();
@@ -3310,7 +3661,18 @@
           syncDeviceToDatabase(deviceId, data);
 
           // FAULT DETECTION: Trigger notification if state changed to FAULT
-          if (currentState === 'FAULT' && previousState !== 'FAULT') {
+          if (data.hardware_type === 'EVE_ESP32S3') {
+            // Eve: check per-pump states s1, s2, s3
+            for (var pi = 1; pi <= 3; pi++) {
+              var prevS = previousData['s' + pi];
+              var curS = data['s' + pi];
+              if (curS === 'FAULT' && prevS !== 'FAULT') {
+                console.log('FAULT detected on device:', deviceId, 'pump', pi);
+                triggerFaultNotification(deviceId);
+                break;
+              }
+            }
+          } else if (currentState === 'FAULT' && previousState !== 'FAULT') {
             console.log('FAULT detected on device:', deviceId);
             triggerFaultNotification(deviceId);
           }
